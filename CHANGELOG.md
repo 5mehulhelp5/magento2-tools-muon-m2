@@ -6,6 +6,85 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — Surface-completeness rule pack
+
+### Added
+
+- **`magento2-static-analysis` now checks that a surface's file SET is complete**, not just that
+  each file is valid. New `scripts/surface-invariants.sh` — 12 cross-file rules emitted as
+  `category: surface` with rule ids `SI-01`…`SI-12`, wired into `run-analysis.sh` so they flow
+  into the existing quality JSON/SARIF document. Tool-free (pure file inspection), so they run
+  where phpcs/phpstan are unavailable. Module scope only: every rule reasons about one module's
+  file set, and a site/diff run reports "not checked" unless invoked per module.
+
+  Every rule was derived from a defect observed in production work, where a generator emitted
+  **N−1 of the N files a surface needs** and every existing gate passed: XSD validation (each
+  file was individually valid), `setup:di:compile` (nothing referenced a missing class), PHPUnit
+  (**because the tests mocked the very collaborator whose wiring was missing**), phpcs and
+  phpstan (they see one file at a time). The failures showed up only at runtime, often silently —
+  an empty grid, a never-resolving admin loader, a message published into no queue, a 404 with no
+  log entry — and three were total admin lockouts.
+
+  | Rule | Severity | Asserts | Defect it came from |
+  |------|----------|---------|--------|
+  | SI-01 | high | queue topic has a publisher (repo-wide — it may live in a sibling module) | generated queue surface, publisher file omitted |
+  | SI-02 | high | queue topic has a topology binding | same surface |
+  | SI-03 | high | consumer's queue is a destination some binding creates | same surface |
+  | SI-04 | high | `TagScope` subclass's `TYPE_IDENTIFIER` is registered in `cache.xml` | generated cache class, never registered |
+  | SI-05 | high | a di-wired cache type is not received as `App\CacheInterface` | cache type injected under the wrong interface |
+  | SI-06 | high | a registered grid collection provides the `SearchResultInterface` bridge | generated grid bound to a vanilla collection |
+  | SI-07 | high | form UI component declares a `template` item | generated admin form, missing template item |
+  | SI-08 | medium | `dynamicRows` does not repeat its own name as `dataScope` | hand-written dynamicRows double-binding |
+  | SI-09 | **critical** | a foreign ACL id is re-declared under its owner's parent | generated acl.xml, wrong parent chain |
+  | SI-10 | high | `collections` registration is in global `etc/di.xml` | grid registration in an area di.xml |
+  | SI-11 | high | a URL built from this module's route resolves to a controller | template route string vs controller class name |
+  | SI-12 | high | every ACL parent id in the chain is declared by some module | unverified ACL parent path in a blueprint |
+
+  SI-09 is Critical because `Acl\Builder` merges every module's `acl.xml` into one tree; the same
+  id under two parents raises `Resource id '…' already exists in the ACL` from
+  `Session::processLogin()`, so nobody can log into the admin — while the storefront stays
+  healthy, which is why a storefront smoke test and an HTTP 302 on `/admin` both look green.
+  Validated by replay: against the pre-fix state of a real module that caused such a lockout, the
+  rule fires Critical and its recommendation names the same fix that was reached by hand; against
+  the fixed module it is silent.
+
+- `tests/test-surface-invariants.sh` — a dirty fixture with one violation per rule (asserting
+  **exactly** the expected rule ids, the required schema fields, and that each finding points at
+  the file that has to change) plus a clean fixture asserting **zero** findings. The clean-fixture
+  assertion is the load-bearing one: a rule that fires on correct code is worse than no rule.
+  Also covers loud degradation (unparseable XML named on stderr; a missing `vendor/` tree
+  reporting SI-09 as *not checked* rather than passing).
+
+- `references/surface-invariants.md` — rule catalogue with the origin bug for each, the two
+  false-positive classes found while validating against 66 real modules, and the "adding a rule"
+  checklist (start from a real defect; encode the mechanism from vendor source, not memory).
+
+### Changed
+
+- `magento2-context/references/findings-schema.md` documents the additive `surface` category for
+  `magento2-static-analysis`. `magento2-context` is deliberately not version-bumped — the change
+  is additive and a bump would ripple its `@ver` token across ~20 unrelated files.
+- `magento2-static-analysis` Phase 2 now surfaces `scanner_errors` in the fix plan: a scanner that
+  degraded checked *nothing*, which is not the same as finding nothing.
+
+### Notes
+
+- Calibration on 66 real modules across three stores produced **one** finding, itself a verified
+  true positive: a module declares a topic on the `db` connection but binds only its `.amqp`
+  sibling topic in the topology. `MysqlMq\Model\Driver\Exchange::enqueue()` collects destinations
+  by matching topology bindings to the topic, so that publish reaches zero queues and the payload
+  is dropped silently.
+- Two false-positive classes were found and fixed during that sweep: a bare `'a/b/c'` literal is
+  usually a `scopeConfig` path rather than a URL (and a module's config section id typically equals
+  its route id), so SI-11 matches only strings passed to a URL builder; and judging a class by its
+  own file text misses a bridge inherited from core, so SI-06 walks the chain into
+  `vendor/magento` and skips-by-name when an ancestor is unresolvable.
+- Known gap, left alone deliberately: `run-analysis.sh`'s per-scanner `*.err` temp files are
+  written but never forwarded to stderr, so a phpcs/phpstan crash is still absent from
+  `scanner_errors`. Fixing it means changing four scanners' reporting behaviour and could inject
+  tool progress-noise into every report, so it is out of scope here. The new scanner routes its
+  own degradation straight to stderr.
+
 ## [1.25.0] — 2026-07-30 — Smoke gate: read all three of Magento's error sinks
 
 ### Fixed

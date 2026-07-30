@@ -33,7 +33,7 @@ skills evolve.
 | magento2-system-config     | 1.1.3   | New field type/template, config-reader pattern change                         |
 | magento2-cli-command       | 1.1.2   | New mode/template, command or cron pattern change                             |
 | magento2-message-queue     | 1.1.3   | New connection type/template, topic or consumer pattern change                |
-| magento2-static-analysis   | 1.1.0   | New tool/rule, autofix-safety calibration change                              |
+| magento2-static-analysis   | 1.2.0   | New tool/rule, autofix-safety calibration change                              |
 | magento2-docs-generate     | 1.3.1   | New docs (developer/user guide, REST+GraphQL reference), example/diagram derivation |
 | magento2-indexer           | 1.1.2   | New indexer/mview pattern, dimension support                                  |
 | magento2-marketplace-prep  | 1.1.0   | New EQP check, readiness-scoring calibration                                  |
@@ -182,6 +182,17 @@ skills evolve.
   `magento2-module-upgrade` now routes through the shared emitter (gains SARIF). New
   `magento2-audit@1.0.0` orchestrator consolidates every findings dimension into one ranked report +
   merged SARIF.
+- **Plugin 1.26.0 — Surface-completeness rule pack.** `magento2-static-analysis` gained
+  `scripts/surface-invariants.sh`: 12 cross-file rules (`category: surface`, rule ids SI-01…SI-12)
+  that assert a surface's file SET is complete, which no single-file linter can see. Every rule was
+  derived from a real defect in `.docs/bug-fixes/` where a generator emitted N−1 of the N files a
+  surface needs and every gate passed — XSD, `setup:di:compile`, PHPUnit (the tests mocked the very
+  collaborator whose wiring was missing), phpcs and phpstan. Three of those defects were total
+  admin lockouts, so SI-09 (a foreign ACL id re-declared under the wrong parent) is Critical.
+  Tool-free, so it runs where phpcs/phpstan are absent; module scope only. Minor bump (new rule):
+  `magento2-static-analysis 1.1.0 → 1.2.0`. `magento2-context`'s findings-schema gained the
+  additive `surface` category and is deliberately NOT bumped (a bump ripples its `@ver` token
+  across ~20 unrelated files).
 - **Plugin 1.25.0 — Smoke gate reads all three error sinks.** The Phase 6B smoke gate diffed
   only `var/log/exception.log`, so it reported PASS while Magento had recorded a hard failure
   elsewhere. Magento writes failures to three sinks and two never reach `exception.log`:
