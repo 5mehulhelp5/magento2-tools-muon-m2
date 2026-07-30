@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — Surface-completeness rule pack
+## [1.26.0] — 2026-07-30 — Surface-completeness rule pack
 
 ### Added
 
