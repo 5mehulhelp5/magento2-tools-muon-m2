@@ -32,6 +32,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   `PHPSTAN_MEMORY_LIMIT`) plus a type-guarded `files` and its run-level `errors` surfaced, and every
   tool's stderr is now forwarded so a failure lands in `scanner_errors`.
 
+- **Every phpstan finding pointed at `'?'` instead of a file.** The path is the `files{}` dict
+  *key* — phpstan's per-message objects carry `message`/`line`/`ignorable` but no `file` — so
+  iterating `.values()` and reading `err['file']` resolved to `'?'` for all of them. `evidence.file`
+  is what the SARIF emitter anchors a result to, so those findings reached Code Scanning with
+  nothing to attach to. The parser now iterates `.items()` and takes the key. Latent rather than
+  new: phpstan was crashing before this release, so it produced no findings to mis-anchor. Found by
+  GitHub Copilot's review of this PR.
+
 ### Changed
 
 - **PHPMD now runs against the module's own `phpmd.xml` when it ships one**, falling back to the

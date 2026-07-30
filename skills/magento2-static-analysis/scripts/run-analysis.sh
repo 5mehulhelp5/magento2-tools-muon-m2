@@ -200,8 +200,15 @@ files = raw.get('files', {})
 if not isinstance(files, dict):
     files = {}
 
-for file_errors in files.values():
-    for err in file_errors.get('messages', []):
+# The file path is the dict KEY — phpstan's per-message objects carry `message`/`line`/`ignorable`
+# but no `file`. Iterating .values() and reading err['file'] therefore resolved to '?' for EVERY
+# phpstan finding, which strands it: `evidence.file` is what the SARIF emitter anchors a result to,
+# so Code Scanning had nothing to attach the finding to. Latent until now only because phpstan was
+# crashing before this release and produced no findings at all to mis-anchor.
+for file_path, file_errors in files.items():
+    if not isinstance(file_errors, dict):
+        continue
+    for err in file_errors.get('messages', []) or []:
         ignorable = bool(err.get('ignorable', False))
         out.append({
             'id': f'quality-phpstan-{seq:04d}',
@@ -209,7 +216,8 @@ for file_errors in files.values():
             'category': 'type',
             'subcategory': 'phpstan',
             'title': err.get('message', 'PHPStan error'),
-            'evidence': [{'file': err.get('file', '?'), 'line': err.get('line', 1)}],
+            # Prefer a per-message `file` if some formatter version does emit one; the key is truth.
+            'evidence': [{'file': err.get('file') or file_path, 'line': err.get('line', 1)}],
             'recommendation': 'Fix the type error or add a PHPStan ignore annotation.',
             'verification': 'Re-run phpstan analyse after fixing.',
             'tags': ['phpstan', 'manual', 'ignorable' if ignorable else 'must-fix'],

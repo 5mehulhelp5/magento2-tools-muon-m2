@@ -196,6 +196,16 @@ if len(phpstan_ok) != 1:
                 f'got {len(phpstan_ok)}')
 elif 'no return type specified' not in (phpstan_ok[0].get('title') or ''):
     fail.append('phpstan: parsed the dict shape, but the message did not survive')
+else:
+    # The file path is the dict KEY — phpstan's message objects carry no `file`. Reading one gave
+    # '?' for every finding, which strands it: evidence.file is what SARIF anchors a result to.
+    # Asserting the message survived is not enough; a finding that points nowhere is not usable.
+    ev = (phpstan_ok[0].get('evidence') or [{}])[0]
+    if ev.get('file') != '/m/B.php':
+        fail.append(f"phpstan: evidence.file is {ev.get('file')!r}, not the files{{}} key — "
+                    'the finding cannot be anchored to a file in SARIF')
+    if ev.get('line') != 21:
+        fail.append(f"phpstan: evidence.line is {ev.get('line')!r}, expected 21")
 
 # 8. A module that ships phpmd.xml must be judged by it, not by the built-in sets.
 argv = open(os.environ['PHPMD_ARGV2'], encoding='utf-8').read().splitlines()
