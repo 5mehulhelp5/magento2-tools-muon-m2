@@ -12,14 +12,14 @@ skills evolve.
 | magento2-context           | 1.11.0  | JSON schema changes, new resolution rules, new tool probes          |
 | magento2-module-create     | 1.10.2  | New template added, surface added, naming rule changed              |
 | magento2-module-review     | 2.4.0   | New checklist category, severity calibration change, new JSON field, fix-routing change |
-| magento2-feature-implement | 2.13.1  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
-| magento2-bug-fix           | 1.1.0   | Workflow phase change, RCA format change                            |
-| magento2-deploy            | 1.3.0   | Deploy plan template change, rollback recipe change                 |
+| magento2-feature-implement | 2.14.0  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
+| magento2-bug-fix           | 1.2.0   | Workflow phase change, RCA format change                            |
+| magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
 | magento2-module-upgrade    | 1.2.0   | New deprecation map, BC-break detection rules                       |
 | magento2-security-audit    | 1.6.0   | New CVE source, new pattern, severity calibration change, parser hardening |
 | magento2-performance-audit | 1.2.0   | New pattern, new runtime check, severity calibration change         |
-| magento2-debug             | 1.3.0   | New mode added, output format change                                |
+| magento2-debug             | 1.3.1   | New mode added, output format change                                |
 | magento2-eav-attribute     | 1.3.2   | New entity type supported, new input type, template change          |
 | magento2-graphql-create    | 1.0.6   | New resolver pattern, schema-migration rule change                  |
 | magento2-frontend-create   | 1.0.5   | New theme detection rule, new component pattern, new theme-routing rule |
@@ -182,6 +182,21 @@ skills evolve.
   `magento2-module-upgrade` now routes through the shared emitter (gains SARIF). New
   `magento2-audit@1.0.0` orchestrator consolidates every findings dimension into one ranked report +
   merged SARIF.
+- **Plugin 1.25.0 — Smoke gate reads all three error sinks.** The Phase 6B smoke gate diffed
+  only `var/log/exception.log`, so it reported PASS while Magento had recorded a hard failure
+  elsewhere. Magento writes failures to three sinks and two never reach `exception.log`:
+  `Logger\Handler\System::write()` routes a record there only when `context['exception']` is set
+  (so a string-level `critical()` — e.g. the ObjectManager's `Type Error occurred when creating
+  object: …` — lands in `system.log`), and `Webapi\ErrorProcessor::apiShutdownFunction()` writes
+  `var/report/api/{id}` on a PHP fatal with no logger call at all. S1/S8 now baseline and diff
+  every `var/log/*.log` (level-gated at ERROR+, attribution-gated by the feature's namespace) plus
+  `var/report/**` (recursive, path+mtime), emitting `signals.json`; `magento2-deploy`'s smoke gained
+  a windowed `error-reports`/`error-logs` check. Minor bumps (capability changed):
+  `magento2-feature-implement 2.13.1 → 2.14.0` (new signal sources, new script options + exit
+  codes, template structure change), `magento2-deploy 1.3.0 → 1.4.0` (new smoke check),
+  `magento2-bug-fix 1.1.0 → 1.2.0` (Phase 1 collection targets changed). Patch bump:
+  `magento2-debug 1.3.0 → 1.3.1` (log-catalogue corrections — the old table mis-attributed
+  `var/report` and described `exception.log` as severity-routed).
 - **Plugin 1.18.0 — Model tiering.** `magento2-feature-implement` Phase 4 now stamps each task
   record with an advisory `Model tier (advisory)` field (`opus`/`sonnet`/`haiku`), and the
   read-only `magento2-explorer` agent defaults to the `haiku` model tier — overridable via the

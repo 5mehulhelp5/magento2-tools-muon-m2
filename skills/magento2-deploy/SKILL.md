@@ -151,9 +151,12 @@ Run smoke tests appropriate to the modules deployed. See `references/smoke-tests
 | `frontend_ui`                    | `curl -s {host}/{vendor_lower}_{module_lower}/{route}/` returns expected status           |
 | `cron`                           | crontab installed (`crontab -l \| grep cron:run`) + `cron_schedule` has recent rows (no `cron:status` command exists) |
 | `queue`                          | `{magento_cli} queue:consumers:list` shows new consumers registered                       |
+| Any                              | no `var/report/**` file and no module-attributed ERROR+ `var/log/*.log` entry since the deploy started — two of Magento's three error sinks never write to `exception.log` |
 
 A smoke failure does NOT trigger rollback (the deploy completed) but is reported as a
-"needs investigation" finding. Run via `${CLAUDE_SKILL_DIR}/scripts/smoke.sh`.
+"needs investigation" finding. Run via `${CLAUDE_SKILL_DIR}/scripts/smoke.sh`, passing
+`SINCE_TS` (the Phase 3 start timestamp), `MAGENTO_ROOT`, `MODULES` and `BASE_URL` — without
+`SINCE_TS` the error-signal scan silently widens to a 15-minute window.
 
 ### Phase 6 — Report
 

@@ -6,6 +6,88 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — Smoke gate: read all three of Magento's error sinks
+
+### Fixed
+
+- **The Phase 6B smoke gate reported PASS while Magento had recorded a hard failure.** S1/S8
+  baselined and diffed exactly one file, `var/log/exception.log`
+  (`smoke-baseline.sh:31-47` hardcoded it; `error-signal-baseline.md` documented the exclusion:
+  "only `exception.log` is the strict gate"). Magento writes failures to three sinks and two of
+  them never reach that file:
+  - `Magento\Framework\Logger\Handler\System::write()` routes a record to `exception.log` **only
+    when `$record['context']['exception']` is set** — severity is irrelevant. So
+    `$logger->critical('<string>')` goes to `system.log`, and the canonical case is
+    `ObjectManager\Factory\AbstractFactory:127` logging `Type Error occurred when creating object:
+    Vendor\Module\Plugin\Foo, Too few arguments` when a plugin's constructor does not match its DI
+    wiring — a broken module, invisible to the gate.
+  - `Magento\Framework\Webapi\ErrorProcessor::apiShutdownFunction()` writes `var/report/api/{id}`
+    on a PHP fatal during a REST/GraphQL request with **no logger call at all**.
+  `var/report` appeared exactly once in the whole plugin before this change — a row in a doc
+  table. Nothing baselined or diffed it. Measured on a real 2.4.8 store: `exception.log` grew 0
+  bytes across a window in which `system.log` took 4 attributed `Type Error` criticals and two
+  `var/report` files were written. Old gate: PASS. New gate: 1 Critical + 2 High, all gating.
+
+- **`magento2-deploy`'s `smoke.sh` corrupted its own JSON output when a detail contained a
+  backslash.** `record()` escaped `"` but not `\`, so any Magento class name in a detail string
+  (e.g. the module list in "not in enabled list") produced an unparseable `Invalid \escape`
+  document. Backslash is now escaped before the quote, and control characters are folded.
+
+### Added
+
+- **S1/S8 scan three sources.** `smoke-baseline.sh` now writes a manifest — every
+  `var/log/*.log` (+`.log.1`) with size and rotation hash, and every existing `var/report/**` file
+  with its mtime — alongside the four legacy keys, which are unchanged so an in-flight run started
+  on the old script still parses. `smoke-tail-since.sh` diffs all three and emits
+  `smoke/raw/S8/signals.json` plus per-log diffs and decoded report copies. New options:
+  `--json`, `--namespace`, `--surfaces`, `--allowlist`. New exit codes: `4` (non-gating signals
+  only) and `5` (**degraded** — python3 missing or a pre-manifest baseline, so only
+  `exception.log` was checked; the caller must record a Medium coverage finding rather than read
+  it as a clean run).
+- **Level and attribution gating, so the wider net stays usable.** `cron.log` on a real store
+  carries six figures of INFO lines in a smoke window, so only ERROR+ is a candidate outside
+  `exception.log`. An ERROR+ entry naming the feature's `Vendor_Module` / `Vendor\Module` is
+  Critical and gates; an unattributed CRITICAL+ is High and gates; an unattributed plain ERROR is
+  Medium and does not. `debug.log` never gates (it mirrors the other handlers) and cron/consumer
+  logs gate only when the feature declares that surface. Without attribution, broadening the gate
+  would have re-created the FI-1 problem — unfixable background noise pinning every run to the
+  5-iteration cap. Findings are aggregated by normalised signature, so one fault firing 40 times
+  is one finding with `occurrences: 40` (92 → 21 findings on the real-store run above).
+- **Report-file detection that matches how Magento writes them.** Recursive walk (reports nest as
+  `var/report/xx/yy/{sha256}` when `MAGE_ERROR_REPORT_DIR_NESTING_LEVEL` or `local.xml`'s
+  `dir_nesting_level` is set), plus mtime comparison — a report is named after a hash of its
+  content, so a recurring exception rewrites the *same path* and a path-set diff alone would miss
+  it. Contents decode as JSON, PHP-`serialize()` (older versions) or raw text; an undecodable
+  report is reported, never dropped.
+- **`magento2-deploy` smoke checks error signals.** New `error-reports` and `error-logs` checks,
+  windowed on `SINCE_TS` (the deploy start; absent, a 15-minute default that says so in the
+  detail). Previously the post-deploy smoke checked module status, DB status and HTTP codes only —
+  a deploy that broke a plugin's DI wiring passed clean.
+- `tests/test-smoke-signals.sh` — 16 cases over a fixture tree: nested and `api/` reports, a
+  report rewritten in place (and one untouched, which must stay silent), a log file created
+  mid-run, `exception.log` rotation, another log rotating mid-run (its `.log.1` must not
+  resurface pre-baseline errors), 500-line INFO churn, attributed vs unattributed errors,
+  surface-conditional cron gating, a malformed baseline, a pre-manifest baseline (must exit 5,
+  never 0), and the legacy `exception-diff.log` byte contract.
+
+### Changed
+
+- `references/exception-log-baseline.md` → **`references/error-signal-baseline.md`**, rewritten:
+  the three sources with their Magento source citations, the level-policy and attribution tables,
+  the allowlist contract (now written to `smoke/allowlist.txt` at S1), and the exit-code table.
+- S8 is renamed "Error-signal diff" across `smoke-test-guide.md`, `smoke-runner.md`, `SKILL.md`,
+  `plan.md`, `task-record.md`, `smoke-run-report.md` and `smoke-findings.md`; the severity rubric
+  and fix-routing tables now cover log and report signals, and the findings template gained the
+  `log_error` / `log_warning` / `log_unparsed` / `log_missing` / `log_unreadable` / `report_file` /
+  `smoke_coverage` categories.
+- `magento2-debug/references/log-locations.md` — the shared log catalogue had two wrong rows:
+  `exception.log` described as "uncaught exceptions, fatal errors" (it is context-routed, and API
+  fatals never land there) and `var/report/{hash}` attributed to a non-existent
+  "`Magento_ErrorHandler`" module. Both corrected, with a new "What to Search When the Symptom Is
+  'No Log Entry'" section and report-decoding commands.
+- `magento2-bug-fix` Phase 1 now collects `var/report/**` by default and treats "the error is not
+  in the logs" as a routing fact to check rather than a dead end.
+
 ## [1.24.0] — 2026-07-22 — CVE parser: severity-collapse fix + fail-loud hardening
 
 ### Fixed

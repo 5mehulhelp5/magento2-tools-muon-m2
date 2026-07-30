@@ -18,14 +18,14 @@ when the feature actually exercises that surface.
 
 | ID | Suite | Always run? | Purpose |
 |----|-------|-------------|---------|
-| S1 | Baseline & probe | Yes | Snapshot `var/log/exception.log` byte offset; probe BASE_URL, admin URL, browser tool, credentials. Halts cleanly if a precondition is missing. |
+| S1 | Baseline & probe | Yes | Snapshot all three error signals — `var/log/exception.log`, every other `var/log/*.log`, and `var/report/**`; probe BASE_URL, admin URL, browser tool, credentials. Halts cleanly if a precondition is missing. |
 | S2 | REST API scenarios | If feature adds/changes REST | Document and execute every scenario per endpoint (happy / missing-auth / wrong-ACL / validation / not-found / pagination). |
 | S3 | Admin login | If admin surfaces touched (default: yes) | Browser opens `/admin`, posts credentials, asserts dashboard rendered, no JS console error. |
 | S4 | Stores → Configuration | If feature adds/changes admin config | Walk every new/changed section; assert it renders with no exception. (Changing + reverting a field is best-effort: a headless write needs the form key + secret key, so do it manually or via a data fixture and note it.) |
 | S5 | Admin grids | Always when admin surfaces touched | Customers, Catalog → Products, Sales → Orders. For each: load, assert rows render, apply one filter (clearing it is best-effort). Plus any new grid the feature added. |
 | S6 | New / changed pages & controllers | Per route registered | One pass per admin and frontend route the feature owns. Render, screenshot, click primary CTA, assert no console error. |
 | S7 | Customer storefront flows | If feature touches customer area or default flows | Register throwaway customer → log out → log back in → visit every My Account tab. Assert no console error and no exception. |
-| S8 | Exception.log diff | Yes | Tail `var/log/exception.log` from S1 offset; fail if any new line appeared during S2–S7. |
+| S8 | Error-signal diff | Yes | Diff all three sources from the S1 baseline. Fail on any new group in `exception.log`, any ERROR+ entry in another `var/log/*.log`, or any new/refreshed `var/report/**` file. Level-gated and attribution-gated — see `error-signal-baseline.md`. |
 | S9 | Triage & report | Yes | Classify findings, write `run-{N}.md`, decide pass/fail, drive loop. |
 
 ---
@@ -36,9 +36,9 @@ Mirror `magento2-module-review`'s scale to keep reports composable.
 
 | Severity | Definition (smoke) | Examples |
 |----------|--------------------|----------|
-| Critical | Site-down, data loss, security bypass, exception.log entry from new code path, admin or storefront 5xx | Admin login 500, REST endpoint dumps stack trace, registration creates customer with empty hash, schema rollback failed |
-| High     | Broken golden path | Customers grid filter returns 0 rows when it should not, new REST 200s but ignores ACL, JS error blocks Save Config, page renders but missing the new section |
-| Medium   | Visual regression, slow response > target, deprecation warning, non-blocking console error | New page renders > 2s, deprecation warning in `var/log/system.log`, console `error:` from unrelated 3rd-party JS |
+| Critical | Site-down, data loss, security bypass, any `exception.log` entry, an ERROR+ log entry or `var/report` file attributable to the feature's namespace, admin or storefront 5xx | Admin login 500, REST endpoint dumps stack trace, `Type Error occurred when creating object: Vendor\Module\Plugin\Foo` in system.log, new `var/report/api/*` after a REST call, schema rollback failed |
+| High     | Broken golden path; a `var/report` file or CRITICAL+ log entry during the run that names no feature namespace | Customers grid filter returns 0 rows when it should not, new REST 200s but ignores ACL, JS error blocks Save Config, page renders but missing the new section |
+| Medium   | Visual regression, slow response > target, deprecation warning, non-blocking console error, unattributed ERROR or WARNING in a log, allowlisted signal, degraded S8 scan | New page renders > 2s, deprecation warning in `var/log/system.log`, unrelated `Braintree\Configuration` ERROR, console `error:` from unrelated 3rd-party JS |
 | Low      | Copy/typo, cosmetic, suggestion | Label not translated, icon misaligned, redundant network request |
 
 Only **Critical** and **High** trigger the auto-fix loop. Medium and Low are recorded but do not
@@ -53,7 +53,7 @@ mapping is deterministic — do not pick the skill ad-hoc.
 
 | Finding category | Delegated to | Notes |
 |------------------|--------------|-------|
-| PHP exception in `var/log/exception.log` | `magento2-debug` (triage) → `magento2-bug-fix` | Pass run report path so debug skill has the reproduction. |
+| PHP exception in `var/log/exception.log`, attributed ERROR+ in any other `var/log/*.log`, or a new `var/report/**` file | `magento2-debug` (triage) → `magento2-bug-fix` | Pass the run report path plus the `signals.json` finding id so debug has the reproduction. A `var/report` file decodes to message + trace + URL in `smoke/raw/S8/reports/`. |
 | Broken controller / route / layout | `magento2-bug-fix` | Re-runs `magento2-module-review --diff` after the fix. |
 | Broken REST contract or response shape | `magento2-bug-fix` (+ `magento2-module-review --diff`) | Update scenarios.md if the contract was wrong, not the implementation. |
 | Slow page / N+1 / cache miss | `magento2-performance-audit` → `magento2-bug-fix` | Performance audit produces the diagnosis; bug-fix applies the change. |
@@ -110,8 +110,8 @@ Phase 6B passes when, simultaneously:
 
 1. Every applicable suite (S1 + S2–S7 as relevant + S8 + S9) has run to completion.
 2. S9 records zero Critical and zero High findings.
-3. S8's exception.log diff has no **new or unresolved** exception groups (groups already
-   marked `resolved` in findings.md may linger in the diff — see `exception-log-baseline.md`).
+3. S8's error-signal diff has no **new or unresolved** gating signals (signals already
+   marked `resolved` in findings.md may linger in the diff — see `error-signal-baseline.md`).
    An empty diff trivially satisfies this.
 
 Any other outcome triggers the fix loop unless the cap is reached.

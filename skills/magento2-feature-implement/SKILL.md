@@ -53,7 +53,7 @@ the full implementation from analysis through tested, reviewed, reported deliver
   shared loop in `magento2-context/references/tdd-discipline.md`.
 - **Smoke before report.** Phase 6 has two sub-phases: **6A** (unit tests + coverage) and **6B**
   (smoke battery — REST scenarios, admin login, Stores → Config, grids, new routes, customer
-  flows, exception.log diff). Phase 7 may not start while any Critical or High smoke finding is
+  flows, error-signal diff). Phase 7 may not start while any Critical or High smoke finding is
   open. See `references/smoke-test-guide.md`.
 - **Smoke loop is bounded.** Critical/High smoke findings are auto-routed to the right
   `magento2-*` sub-skill for remediation, then Phase 6 re-runs from 6A. The loop halts at **5
@@ -726,12 +726,12 @@ unit tests.
 regressed in the surfaces typical sites care about.
 
 Load `references/smoke-test-guide.md`, `references/smoke-runner.md`, and
-`references/exception-log-baseline.md` before starting. Phase 6B is **mandatory** in `feature`
+`references/error-signal-baseline.md` before starting. Phase 6B is **mandatory** in `feature`
 mode, reduced in `hotfix` and `extend` modes, and skipped in `spike` mode (see
 `references/modes.md`).
 
 Emit one `S*` task per applicable suite (Phase 4 task type `S`). S1 (baseline & probe) and S8
-(exception.log diff) are always present; S2–S7 only when the feature exercises that surface.
+(error-signal diff) are always present; S2–S7 only when the feature exercises that surface.
 The suite catalogue, per-suite acceptance, the S1 probe table + production guard, the S9
 triage/decision loop, and the data-hygiene/cleanup rules live in the references — **follow
 them rather than duplicating here** (the duplicate had already drifted from the source):
@@ -741,8 +741,9 @@ them rather than duplicating here** (the duplicate had already drifted from the 
   unless `CLAUDE.md` contains `Allow smoke on production: true`.
 - `references/smoke-test-guide.md` — the S1–S9 suite catalogue, per-suite acceptance, severity
   rubric, fix-routing table, halt prompt, and data-hygiene/cleanup rules.
-- `references/exception-log-baseline.md` — the S8 baseline/diff mechanics and the "no
-  new/unresolved exception groups" pass rule.
+- `references/error-signal-baseline.md` — the S8 baseline/diff mechanics for all three signal
+  sources (`exception.log`, other `var/log/*.log`, `var/report/**`), the level/attribution
+  policy, the exit-code contract, and the "no new/unresolved gating signals" pass rule.
 
 Scripts: `${CLAUDE_SKILL_DIR}/scripts/smoke-baseline.sh` (S1), `smoke-tail-since.sh` (S8),
 `smoke-browser.mjs` (browser S3–S7), `curl`/PHP-cURL (S2).
@@ -867,7 +868,7 @@ is **mandatory** in `feature` and `extend` modes, **reduced** in `hotfix` mode, 
 - `references/tdd-mode.md`: opt-in test-first execution — flag/config/env triple, per-mode applicability, how Phase 5 applies the shared `tdd-discipline.md` loop.
 - `references/smoke-test-guide.md`: Phase 6B suites, severity rubric, fix routing, loop control.
 - `references/smoke-runner.md`: environment probe, REST invocation, headless browser commands, fallbacks.
-- `references/exception-log-baseline.md`: byte-offset baseline + tail-since-offset diff for `var/log/exception.log`.
+- `references/error-signal-baseline.md`: byte-offset baseline + tail-since-offset diff for `var/log/exception.log`, every other `var/log/*.log` (level-gated), and `var/report/**` (path+mtime).
 - `templates/feature-blueprint.md`: feature blueprint template.
 - `templates/plan.md`: execution-plan (`plan.md`) template — Mermaid diagrams, Current State checklist, Smoke Iterations, summary. No detailed task records.
 - `templates/task-record.md`: detailed task-record template for `tasks.md` / `tasks/` (incl. `S*` examples) — written for review before the plan approval gate.
@@ -875,8 +876,8 @@ is **mandatory** in `feature` and `extend` modes, **reduced** in `hotfix` mode, 
 - `templates/smoke-run-report.md`: per-iteration smoke run report template.
 - `templates/smoke-scenarios.md`: REST scenarios template.
 - `templates/smoke-findings.md`: consolidated, cross-iteration findings template.
-- `${CLAUDE_SKILL_DIR}/scripts/smoke-baseline.sh`: S1 — capture `var/log/exception.log` baseline.
-- `${CLAUDE_SKILL_DIR}/scripts/smoke-tail-since.sh`: S8 — diff `var/log/exception.log` since baseline.
+- `${CLAUDE_SKILL_DIR}/scripts/smoke-baseline.sh`: S1 — capture the error-signal baseline (all `var/log/*.log` + `var/report/**`).
+- `${CLAUDE_SKILL_DIR}/scripts/smoke-tail-since.sh`: S8 — diff every error signal since baseline; emits `signals.json`.
 - `${CLAUDE_SKILL_DIR}/scripts/smoke-browser.mjs`: S3–S7 — headless browser driver (Playwright → Puppeteer → CDP).
 - `magento2-context/references/source-of-truth.md` — source-of-truth hierarchy + the
   no-unrelated-module-scanning rule (allowed reads, live-doc fetch protocol, report affirmation).
@@ -911,8 +912,8 @@ invocations — the `Skill` tool preserves conversation context across phases.
   quality gate (PHPCS, PHPStan, PHPMD, optional auto-fix) and emits ranked findings.
 - `magento2-bug-fix`: invoked by Phase 6B S9 to remediate Critical/High smoke findings —
   default fix delegate; see `references/smoke-test-guide.md` §Fix Routing.
-- `magento2-debug`: invoked by Phase 6B S9 for triage of new `var/log/exception.log` entries
-  before delegating to `magento2-bug-fix`.
+- `magento2-debug`: invoked by Phase 6B S9 for triage of new error signals (`var/log/*.log`
+  entries, `var/report/**` files) before delegating to `magento2-bug-fix`.
 - `magento2-performance-audit`: invoked by Phase 6B S9 when smoke surfaces slow pages,
   N+1, or cache misses.
 - `magento2-security-audit`: invoked by Phase 6B S9 when smoke surfaces an ACL/CSRF/escaping

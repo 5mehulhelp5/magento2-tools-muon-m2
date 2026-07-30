@@ -232,11 +232,16 @@ Model tier (advisory): haiku
 Estimate: S
 
 Description:
-Snapshot `var/log/exception.log` byte offset; probe Base URL, admin URL, credentials, HTTP
+Snapshot all three error signals — `var/log/exception.log` byte offset, every other
+`var/log/*.log`, and the `var/report/**` file set; probe Base URL, admin URL, credentials, HTTP
 client, headless browser; apply production guard. Halt 6B cleanly if a precondition is missing.
 
 Acceptance criteria:
-- `baseline.txt` written with `file`, `size_bytes`, `sha256_of_last_4096`, `captured_at`.
+- `baseline.txt` written with `file`, `size_bytes`, `sha256_of_last_4096`, `captured_at`, plus the
+  `[logs]` and `[reports]` manifest sections. A baseline with no manifest sections means the scan
+  will run degraded — record it as a limitation, do not proceed silently.
+- `smoke/allowlist.txt` written from the `Smoke exception ignore:` patterns in CLAUDE.md (empty
+  file when there are none).
 - All probe results recorded; missing tools tagged as limitations rather than silent skips.
 - Production guard cleared or CLAUDE.md override confirmed.
 
@@ -342,18 +347,27 @@ Acceptance criteria:
 
 ---
 
-### S8: Smoke — Exception.log Diff
+### S8: Smoke — Error-Signal Diff
 
 Type: Smoke
-Target: `.docs/{FeatureName}/smoke/raw/S8/exception-diff.log`
+Target: `.docs/{FeatureName}/smoke/raw/S8/signals.json` (+ `exception-diff.log`, `logs/`, `reports/`)
 Depends on: S2, S3, S4, S5, S6, S7
 Skill: `magento2-feature-implement` (uses `scripts/smoke-tail-since.sh`)
 Model tier (advisory): haiku
 Estimate: S
 
+Description:
+Diff all three signal sources against the S1 baseline, passing `--namespace=` (every module the
+feature owns), `--surfaces=` (cron/queue when the feature declares them) and `--allowlist=`.
+
 Acceptance criteria:
-- Diff against S1 baseline is empty, OR every non-empty group is recorded as a finding.
-- Allowlisted patterns from CLAUDE.md demoted to Medium rather than silently ignored.
+- All three sources scanned: `signals.json` lists every `var/log/*.log` that grew and the
+  `var/report` new/refreshed counts. Exit 5 (degraded — only `exception.log` checked) is recorded
+  as a Medium finding, never treated as a pass.
+- Every gating signal recorded as a finding with its stable `signature`; non-gating signals
+  recorded as Medium.
+- Allowlisted patterns from CLAUDE.md demoted to Medium rather than silently ignored; an invalid
+  pattern surfaces in `degraded[]`.
 
 ---
 

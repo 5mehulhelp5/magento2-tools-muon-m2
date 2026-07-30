@@ -5,7 +5,7 @@ Status: Awaiting Approval
 Blueprint: `.docs/{FeatureName}/blueprint.md`
 Skill versions:
 
-- magento2-feature-implement@2.13.1
+- magento2-feature-implement@2.14.0
   - magento2-context@1.11.0
 
 ---
@@ -70,7 +70,7 @@ graph LR
     S4 --> S5[S5: Admin grids]
     S5 --> S6[S6: New routes]
     S6 --> S7[S7: Customer flows]
-    S7 --> S8[S8: exception.log diff]
+    S7 --> S8[S8: error-signal diff]
     S8 --> S9{S9: Critical/High?}
     S9 -- No --> P1[P1: Final report]
     S9 -- Yes / iter<5 --> FIX[Fix via magento2-* skill]
@@ -109,7 +109,7 @@ completed task makes a resumed run redo work. -->
 - [ ] S5: Smoke — Admin grids (Customers, Catalog Products, Sales Orders + new)
 - [ ] S6: Smoke — New / changed routes
 - [ ] S7: Smoke — Customer storefront flows
-- [ ] S8: Smoke — exception.log diff
+- [ ] S8: Smoke — error-signal diff
 - [ ] S9: Smoke — Triage & report
 - [ ] P1: Final Report
 
