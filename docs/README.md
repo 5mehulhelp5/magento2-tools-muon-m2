@@ -43,3 +43,21 @@ The repository [README](../README.md) covers the repo layout, the contract-test 
 (`bash tests/run-all.sh`), and skill versioning. Skill versions live in
 `skills/magento2-context/references/skill-versioning.md`; the plugin version lives in
 `.claude-plugin/plugin.json` (see [CHANGELOG.md](../CHANGELOG.md)).
+
+### This repository is public
+
+The toolkit is built by using it on real client stores, which is exactly how a client's module
+name, a private hostname, or an internal report title ends up pasted into a rule, a CHANGELOG
+entry, or a doc example. Two habits keep that out:
+
+- **Name nothing real.** Use the sanctioned placeholders (`Acme`, `Vendor`, `MyVendor`) for
+  vendors and modules. When a rule or changelog entry needs to explain *where* a defect came
+  from, describe its **class** — "generated queue surface, publisher file omitted" — never the
+  report title or the module it happened in.
+- **Let the harness check you.** `tests/test-no-private-name-leaks.sh` fails on module
+  identifiers, namespace roots and composer packages outside the sanctioned set, on local
+  filesystem paths, on `*.localhost` hostnames, and on concrete `.docs/bug-fixes/<slug>`
+  citations. Its structural vocabulary is self-calibrating, so a client encountered for the
+  first time is caught without editing the test. It cannot catch an all-lowercase identifier
+  derived from a client name (a queue topic, a config path) — for those, describe the mechanism
+  and leave the identifier out.

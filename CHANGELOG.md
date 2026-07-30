@@ -59,6 +59,21 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   false-positive classes found while validating against 66 real modules, and the "adding a rule"
   checklist (start from a real defect; encode the mechanism from vendor source, not memory).
 
+- **`tests/test-no-private-name-leaks.sh` — a standing guard against private data reaching this
+  public repo.** The toolkit is built by using it on real client stores, which is exactly how a
+  client's module name or an internal report title ends up pasted into a rule, a changelog entry
+  or a doc example; this rule pack's first draft did it in three files at once. The guard fails on
+  Magento module identifiers, PHP namespace roots and composer packages outside a sanctioned
+  placeholder set, on local filesystem paths, on `*.localhost` hostnames, and on concrete
+  `.docs/bug-fixes/<slug>` citations. It names no client — only the sanctioned placeholders — so a
+  client encountered for the first time next year is caught with no edit to the test, and the
+  guard itself leaks nothing. The structural namespace vocabulary is **self-calibrating**: any
+  segment appearing inside a known-framework namespace anywhere in the repo is structural, which
+  is what lets the repo keep writing `Logger\Handler\System` while still flagging an unknown
+  root. Verified in both directions — clean on the repo, and it catches the exact strings that
+  leaked (including a module name with consecutive capitals, which the first version of the regex
+  missed). Documented under "This repository is public" in `docs/README.md`.
+
 ### Changed
 
 - `magento2-context/references/findings-schema.md` documents the additive `surface` category for
@@ -71,7 +86,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 - Calibration on 66 real modules across three stores produced **one** finding, itself a verified
   true positive: a module declares a topic on the `db` connection but binds only its `.amqp`
-  sibling topic in the topology. `MysqlMq\Model\Driver\Exchange::enqueue()` collects destinations
+  sibling topic in the topology. `Magento\MysqlMq\Model\Driver\Exchange::enqueue()` collects destinations
   by matching topology bindings to the topic, so that publish reaches zero queues and the payload
   is dropped silently.
 - Two false-positive classes were found and fixed during that sweep: a bare `'a/b/c'` literal is
