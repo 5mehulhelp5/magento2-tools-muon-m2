@@ -16,11 +16,15 @@
 #   PHPSTAN             phpstan binary path (default: auto-resolved)
 #   PHPMD               phpmd binary path (default: auto-resolved)
 #   RECTOR              rector binary path (default: auto-resolved)
+#   PHPSTAN_MEMORY_LIMIT
+#                       Value for phpstan's --memory-limit (default: 2G). php.ini's default
+#                       (commonly 128M) crashes phpstan on a Magento codebase and returns an
+#                       apparently-clean result. Forwarded to run-analysis.sh.
 #   DOCS_ROOT           default: .docs — project-root artifact dir ({ctx.docs_root}).
 #                       Pass an absolute or project-root path so an in-`src/` cwd cannot
 #                       redirect output into the Magento tree. See magento2-context/SKILL.md.
 #   OUTPUT_DIR          default: {DOCS_ROOT}/quality
-#   SKILL_VERSION       default: 1.2.1
+#   SKILL_VERSION       default: 1.3.0
 #
 # Output:
 #   Writes {OUTPUT_DIR}/{TARGET_MODULE}-quality-{YYYY-MM-DD}.json (module scope) or
@@ -38,9 +42,10 @@ PHPCS="${PHPCS:-}"
 PHPSTAN="${PHPSTAN:-}"
 PHPMD="${PHPMD:-}"
 RECTOR="${RECTOR:-}"
+PHPSTAN_MEMORY_LIMIT="${PHPSTAN_MEMORY_LIMIT:-2G}"
 DOCS_ROOT="${DOCS_ROOT:-.docs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${DOCS_ROOT}/quality}"
-SKILL_VERSION="${SKILL_VERSION:-1.2.1}"
+SKILL_VERSION="${SKILL_VERSION:-1.3.0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMIT_FINDINGS="${SCRIPT_DIR}/../../magento2-context/scripts/emit-findings.sh"
@@ -66,6 +71,7 @@ PHPCS="$PHPCS" \
 PHPSTAN="$PHPSTAN" \
 PHPMD="$PHPMD" \
 RECTOR="$RECTOR" \
+PHPSTAN_MEMORY_LIMIT="$PHPSTAN_MEMORY_LIMIT" \
 TARGET_PATH="$TARGET_PATH" \
 SCOPE="$SCOPE" \
 FINDINGS_FILE="$FINDINGS_FILE_OVERRIDE" \

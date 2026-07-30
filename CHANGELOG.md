@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [1.26.1] — 2026-07-30 — `magento2-static-analysis` reported a false clean
+## [1.27.0] — 2026-07-30 — `magento2-static-analysis` reported a false clean
 
 ### Fixed
 
@@ -39,18 +39,49 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   re-reported exactly what the project had suppressed — most sharply `_resetState()`, whose name is
   *mandated* by Magento's `ResetAfterRequestInterface`, tripping `CamelCaseMethodName`. This also
   aligns the audit with the gate `validate-module.sh` and the seeded module CI already enforce.
-- **PHPMD priority no longer maps to `critical`** (now `1→high, 2→medium, 3→medium, 4→low,
-  5→info`). PHPMD's priority ranks how important a *rule* is, not how severe a *defect* is, and its
-  naming rules ship at priority 1 — so "method is not named in camelCase" became a Critical, which
-  `magento2-audit` turns into a `FAIL` verdict. A lint rule should raise concern without blocking a
-  release on its own.
+- When a module ruleset is used, that fact is recorded in `scanner_errors` — which rules judged the
+  module is provenance the report should carry, since the findings then reflect the rules that
+  module selected rather than the built-in set.
+- **PHPMD severity is now capped at `medium`** (`1→medium, 2→medium, 3→medium, 4→low, 5→info`).
+  PHPMD's priority ranks how important a *rule* is, not how severe a *defect* is, and its
+  `CamelCase*` rules ship at priority 1 — so "method is not named in camelCase" graded Critical.
+
+  The cap, rather than a demotion to High, is the fix: `magento2-audit` blocks its verdict on
+  Critical **and** High alike (`consolidate.sh` → `if sev in ('critical','high'): blockers += 1`,
+  then `FAIL if blockers`), so critical→high would have preserved the exact failure it was meant to
+  stop — `_resetState()`, named that way because `ResetAfterRequestInterface` mandates it, would
+  still `FAIL` the audit of every module that ships no `phpmd.xml` of its own. No phpmd finding can
+  now block a release by itself. A defect phpmd surfaces that genuinely warrants High is one
+  another dimension (security, architecture) is meant to catch on its own merit.
+
+  Note the scope of this: phpcs keeps `ERROR → high`, deliberately. Those are real
+  standard violations on a defect axis, not rule-importance rankings — but since phpcs was
+  returning *nothing* before this release, a module carrying phpcs ERRORs can now move an audit
+  from `PASS` to `FAIL`. That is the gate working, not a regression, and it is called out here
+  because the change becomes visible only once the parser is fixed.
+
+- **`references/tool-matrix.md` now documents all three failure modes** at the point where each
+  tool's invocation is specified — the stdout preamble, the nested phpmd shape, the memory limit and
+  the capped severity map — and no longer shows `2>/dev/null` on the phpstan command. That file is
+  the contract an agent follows when it runs the tools directly instead of through the script, so
+  while it described the pre-fix behaviour, following the documentation reproduced two of the three
+  bugs this release fixes.
+- The bare relative `phpmd.xml` fallback is taken **only when running locally**. The probe runs on
+  the host while phpmd may run in a container via `$RUNNER`; a path under `$TARGET_PATH` resolves
+  the same on both sides, a bare relative path resolves against the container's cwd.
 
 ### Added
 
+- `PHPSTAN_MEMORY_LIMIT` (default `2G`), documented in both scripts' input blocks and forwarded from
+  `build-findings.sh` to the phpstan invocation, so the limit can be raised on a large codebase
+  without editing the script.
 - `tests/test-static-analysis-parsers.sh` — hermetic regression test (tools are stubbed, so it runs
-  without phpcs/phpstan/phpmd installed) asserting each parser reads its tool's real output shape,
-  that a lint rule never grades Critical, and that tool stderr reaches `scanner_errors`. Verified to
-  fail against the pre-fix script on all four counts.
+  without phpcs/phpstan/phpmd installed). Pass 1 asserts each parser reads its tool's real *failure*
+  output shape and that tool stderr reaches `scanner_errors`; pass 2 covers the *success* shapes, so
+  the phpstan crash-path type guard cannot cost a healthy run. It asserts the severity rule against
+  the audit's blocking tiers (`critical` **or** `high`) rather than against `critical` alone — the
+  weaker form passed while `_resetState()` still failed the audit. Verified to fail against the
+  pre-fix script on all four original counts.
 
 ## [1.26.0] — 2026-07-30 — Surface-completeness rule pack
 

@@ -241,10 +241,15 @@ run_phpmd() {
     # ResetAfterRequestInterface, trips CamelCaseMethodName. The module ruleset is also what
     # validate-module.sh and the seeded module CI enforce, so this keeps the audit aligned with
     # the gate the project actually ships.
+    #
+    # The probe runs on the HOST while phpmd may run inside a container via $RUNNER. A path under
+    # $TARGET_PATH is safe either way — it is the same string the tool is handed, so a host hit
+    # means the mount resolves. A BARE relative path is not: it resolves against the container's
+    # cwd, which need not be the host's, so that fallback is taken only when running locally.
     local phpmd_ruleset="cleancode,codesize,controversial,design,naming,unusedcode"
     if [ -f "${TARGET_PATH}/phpmd.xml" ]; then
         phpmd_ruleset="${TARGET_PATH}/phpmd.xml"
-    elif [ -f "phpmd.xml" ]; then
+    elif [ -z "$RUNNER" ] && [ -f "phpmd.xml" ]; then
         phpmd_ruleset="phpmd.xml"
     fi
 
@@ -254,6 +259,14 @@ run_phpmd() {
 
     # phpmd exits 2 when violations found (non-zero).
     "${run_cmd[@]}" > "$raw_file" 2> "$PHPMD_ERR" || true
+
+    # Which rules judged the module is provenance the report must carry: with a module ruleset the
+    # findings reflect the rules that module chose for itself, not the built-in set. Appended
+    # AFTER the run — `2> "$PHPMD_ERR"` truncates, so anything written earlier is lost.
+    if [ "$phpmd_ruleset" != "cleancode,codesize,controversial,design,naming,unusedcode" ]; then
+        echo "run-analysis/phpmd: using the module's own ruleset ${phpmd_ruleset} \
+(findings reflect the rules this module selected, not the built-in set)" >> "$PHPMD_ERR"
+    fi
 
     python3 - "$raw_file" > "$PHPMD_OUT" 2>> "$PHPMD_ERR" <<'PY'
 import json

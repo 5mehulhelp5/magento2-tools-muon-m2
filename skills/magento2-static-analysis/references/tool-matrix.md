@@ -33,11 +33,25 @@ Exit code: 0 = no violations, 1 = violations found, 2 = runtime error.
 `--report=json` produces machine-parseable output; map to findings schema (severity by
 `type`: ERROR → high, WARNING → medium).
 
+**Strip any non-JSON preamble before parsing.** PHP_CodeSniffer 3.13.x writes deprecation notices
+to **stdout, ahead of** the `--report=json` payload — the Magento2 standard's GraphQL
+custom-tokenizer sniffs trigger it:
+
+```
+DEPRECATED: Support for custom tokenizers will be removed in PHP_CodeSniffer 4.0.
+The Magento2.GraphQL.ValidFieldName sniff is listening for GRAPHQL.
+{"totals":{...},"files":{...}}
+```
+
+That makes the payload invalid JSON. A parser that falls back to `[]` on a decode error drops
+every violation and reports the module clean. Drop everything before the first line beginning with
+`{`, and report the decode failure to `scanner_errors` if the payload is still unparseable.
+
 ### phpstan — Detect
 
 ```bash
-{ctx.runner} {ctx.tools.phpstan} analyse --error-format=json --no-progress {scope} \
-    2>/dev/null > {TMP}/phpstan.json
+{ctx.runner} {ctx.tools.phpstan} analyse --error-format=json --no-progress \
+    --memory-limit=2G {scope} > {TMP}/phpstan.json
 ```
 
 Level: use `phpstan.neon`'s configured level; fall back to `--level=5` if no config exists.
@@ -45,15 +59,45 @@ phpstan is report-only — it produces no auto-fixable output. Findings are emit
 `medium` severity; phpstan's analysis JSON does not carry a per-message level value, so
 level-based severity mapping is not possible at parse time.
 
+**`--memory-limit` is not optional.** Without it phpstan inherits php.ini's default (commonly
+128M) and dies on a Magento codebase with *"PHPStan process crashed because it reached configured
+PHP memory limit"*, returning `{"totals":{"errors":1},"files":[]}` — a result that reads as clean.
+Override via `PHPSTAN_MEMORY_LIMIT`.
+
+**Do not discard phpstan's stderr** (this command previously showed `2>/dev/null`). A crashed run
+is the case that most needs reporting, and its diagnostics are what tell a crash apart from a pass.
+Two shapes must be handled at parse time:
+
+- a top-level `errors` list carries run-level failures (crash, config error) — surface each one to
+  stderr so it reaches `scanner_errors`;
+- `files` is a dict keyed by path on success, but a **list** (usually `[]`) on failure — type-guard
+  it before calling `.values()`.
+
 ### phpmd — Detect
 
 ```bash
+# Prefer the module's own ruleset when it ships one; fall back to the built-in sets.
+{ctx.runner} {ctx.tools.phpmd} {scope} json {scope}/phpmd.xml > {TMP}/phpmd.json
 {ctx.runner} {ctx.tools.phpmd} {scope} json cleancode,codesize,controversial,design,naming,unusedcode \
     > {TMP}/phpmd.json
 ```
 
-phpmd is report-only. Map `priority` (1-5) to severity: 1→critical, 2→high, 3→medium,
-4→low, 5→info.
+Running the built-in sets against a module that deliberately excluded rules re-reports exactly what
+the project chose to suppress — most sharply `_resetState()`, whose name is *mandated* by Magento's
+`ResetAfterRequestInterface`, tripping `CamelCaseMethodName`. The module ruleset is also what
+`validate-module.sh` and the seeded module CI enforce. When a module ruleset is used, say so in the
+report: the findings then reflect the rules that module selected for itself, not the built-in set.
+
+phpmd is report-only. Map `priority` (1-5) to severity: **1→medium, 2→medium, 3→medium, 4→low,
+5→info**.
+
+**The map is capped at medium by design — never map phpmd to critical or high.** PHPMD's priority
+ranks how important a *rule* is, not how severe a *defect* is: its `CamelCase*` rules ship at
+priority 1, so a 1:1 map graded "method is not named in camelCase" as Critical. `magento2-audit`
+blocks its verdict on Critical **and** High alike (`consolidate.sh` → `FAIL if blockers`), so any
+mapping above medium lets a style nit veto a release. Demoting critical→high does not fix this; the
+cap does. A defect phpmd surfaces that genuinely warrants High is one another dimension (security,
+architecture) is meant to catch on its own merit.
 
 ### rector — Dry Run (detect only)
 
