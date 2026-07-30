@@ -40,7 +40,8 @@ Deep security audit beyond what `magento2-module-review` does. Adds:
 
 ### Phase 0 — Context Resolution
 
-Invoke `magento2-context`. Capture Magento version, PHP version, edition.
+Invoke `magento2-context`. Capture Magento version, PHP version, edition, and
+`{ctx.runner}` — the runner is not optional here, see Phase 2.
 
 ### Phase 1 — Scope
 
@@ -53,11 +54,47 @@ Invoke `magento2-context`. Capture Magento version, PHP version, edition.
 | Check | Source |
 |-------|--------|
 | `composer audit` | Composer's built-in advisory database |
-| Magento CVE list | Cached Adobe Security Bulletins (`references/magento-cve-database.md`) |
+| Magento CVE list | Cached Adobe Security Bulletins (`references/magento-cve-data.yaml`; the `.md` sibling is the format spec, never matched against) |
 | Roave Security Advisories | `roave/security-advisories` package |
 | Direct vendor CVE check | OSV.dev API (optional, requires network) |
+| Per-CVE patch state | `vendor/bin/patch-status`, when the store ships it — see below |
 
 Findings include CVE ID, severity, affected package, fixed version, upgrade path.
+
+#### Patch state, and why `RUNNER` matters
+
+Adobe decoupled "is this fixed" from "what version am I": isolated patches and hotfixes
+carry security fixes with **no version bump**, so `composer.lock` cannot see patch state and
+an in-range version does not prove vulnerability. `cve-scan.sh` resolves this two ways, in
+order:
+
+1. **`vendor/bin/patch-status`** — Adobe's own verdict. It ships *inside* the security
+   patches and consults Adobe's advisory registry, so it answers the question directly for
+   every advisory in that registry. `PROTECTED` and `NOT_APPLICABLE` suppress the finding,
+   `VULNERABLE` confirms it, `UNKNOWN` defers.
+2. **Curated filesystem signatures** in `references/magento-cve-data.yaml` — the fallback,
+   covering only the advisories we have hand-curated a `detect` block for, currently a
+   small minority of the patch-fixed ones.
+
+**Pass `RUNNER={ctx.runner}`.** The tool is PHP and shells out to `patch(1)`, so on a
+Dockerised stack it only runs inside the app container. Omit the runner there and step 1 is
+skipped: the scan falls back to step 2, and on a freshly-patched store most patch-fixed
+advisories come back `needs-triage` — a page of unactionable findings on a store that is
+fully protected. Existence is probed on the **host** (`vendor/` is bind-mounted); execution
+goes through the runner.
+
+Every patch-fixed finding carries `patch-state-source:` (`patch-status` / `signature` /
+`none`) so an authoritative verdict is distinguishable from a curated one, and so
+`no-signature` is never read as "not checked".
+
+Two traps worth knowing when reading the output:
+
+- **The tool's exit code is not a success signal** — without `patch(1)` it prints an error
+  and still exits 0. Validity is decided by parsing the JSON, never by `$?`. A
+  present-but-unusable tool leaves an explanatory line in `scanner_errors`.
+- `CVE_PATCH_STATUS=0` opts out entirely, for operators who would rather the scanner not
+  execute a binary from the tree it is scanning. The scan then behaves exactly as it did
+  before this source existed.
 
 ### Phase 3 — Secret Scan
 
@@ -118,7 +155,9 @@ The skill produces **two automation artifacts** and **one LLM deliverable**:
    scanners and invokes the shared `magento2-context/scripts/emit-findings.sh` pipeline with
    `SKILL_NAME=magento2-security-audit` and `OUTPUT_KIND=security`. Run
    `build-findings.sh` with `DOCS_ROOT=<output_root>` (the resolved `--docs-root` value,
-   or `.docs` by default) so the JSON/SARIF land under `{output_root}/audits/`. The
+   or `.docs` by default) so the JSON/SARIF land under `{output_root}/audits/`, and with
+   `RUNNER={ctx.runner}` so the CVE scanner can reach `vendor/bin/patch-status` (Phase 2 —
+   without it, patch state falls back to the curated signatures). The
    `magento_core_cve_status` block is injected by `scripts/inject-cve-status.sh` (POST_JSON_HOOK).
 2. **SARIF** (automated). The same `build-findings.sh` invocation also produces
    SARIF via the shared `magento2-context/scripts/emit-findings.sh` pipeline. No separate caller step is
@@ -141,7 +180,10 @@ The skill produces **two automation artifacts** and **one LLM deliverable**:
 ## Reference Files
 
 - `references/security-checklist.md` — full audit catalogue.
-- `references/magento-cve-database.md` — cached Adobe Security Bulletin index.
+- `references/magento-cve-data.yaml` — the live cached Adobe Security Bulletin index; the
+  only file the scanner matches against. Curate new advisories here.
+- `references/magento-cve-database.md` — the record format + an illustrative example.
+  Documentation only; never matched against.
 - `references/secret-patterns.md` — provider-specific secret patterns + regex pack.
 - `references/eqp-rules.md` — Marketplace EQP rule map.
 - `references/pci-context.md` — when findings are PCI-scope-elevating.
@@ -150,7 +192,9 @@ The skill produces **two automation artifacts** and **one LLM deliverable**:
 ## Scripts
 
 - `${CLAUDE_SKILL_DIR}/scripts/secret-scan.sh` — `gitleaks` / `trufflehog` wrapper + regex pack fallback.
-- `${CLAUDE_SKILL_DIR}/scripts/cve-scan.sh` — `composer audit` + OSV.dev wrapper.
+- `${CLAUDE_SKILL_DIR}/scripts/cve-scan.sh` — `composer audit` + Magento-platform CVE
+  matching against `references/magento-cve-data.yaml`, with per-CVE patch state from
+  `vendor/bin/patch-status`. Honours `RUNNER` and `CVE_PATCH_STATUS` (Phase 2).
 - `${CLAUDE_SKILL_DIR}/scripts/cross-module-scan.sh` — di.xml + composer.json graph walker.
 - `${CLAUDE_SKILL_DIR}/scripts/build-findings.sh` — assemble per-phase findings into a single JSON array.
 

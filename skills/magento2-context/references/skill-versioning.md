@@ -17,7 +17,7 @@ skills evolve.
 | magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
 | magento2-module-upgrade    | 1.2.0   | New deprecation map, BC-break detection rules                       |
-| magento2-security-audit    | 1.6.0   | New CVE source, new pattern, severity calibration change, parser hardening |
+| magento2-security-audit    | 1.7.0   | New CVE source, new pattern, severity calibration change, parser hardening |
 | magento2-performance-audit | 1.2.0   | New pattern, new runtime check, severity calibration change         |
 | magento2-debug             | 1.3.1   | New mode added, output format change                                |
 | magento2-eav-attribute     | 1.3.2   | New entity type supported, new input type, template change          |
@@ -43,7 +43,24 @@ skills evolve.
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-07-22)
+## Changelog (last update: 2026-07-30)
+
+- **`magento2-security-audit` 1.6.0 → 1.7.0 — Adobe's `patch-status` as a CVE source.**
+  Adobe decoupled "is this fixed" from "what version am I": isolated patches and hotfixes carry
+  security fixes with no version bump, so `composer.lock` cannot see patch state. The scanner
+  judged that state only from curated `patched_signature`/`vulnerable_signature` pairs, which
+  exist for a small minority of the patch-fixed advisories — so a fully-patched store came back
+  as a page of `needs-triage` findings, one of them Critical. `cve-scan.sh` now consults
+  `vendor/bin/patch-status` when the store ships it and treats its per-CVE verdict as
+  authoritative over the signatures: it ships *inside* the security patches and covers every
+  advisory in Adobe's registry. `PROTECTED`/`NOT_APPLICABLE` suppress the finding, `VULNERABLE`
+  confirms it, `UNKNOWN` returns no opinion and defers to the signatures. Findings gained a
+  `patch-state-source:` tag (`patch-status`/`signature`/`none`) so an authoritative verdict is
+  distinguishable from a curated one. Two traps are handled explicitly: the tool exits 0 even
+  when it cannot run, so validity is decided by parsing the JSON rather than by `$?`; and it is
+  PHP needing `patch(1)`, so `RUNNER` is honoured — existence probed on the host, execution
+  through the runner. `CVE_PATCH_STATUS=0` opts out. Fully degrading: no tool, disabled,
+  malformed output, or an unmentioned CVE all leave prior behaviour intact.
 
 - **`magento2-security-audit` 1.5.0 → 1.6.0 — CVE parser hardening + severity-collapse fix.**
   The CVE-data parser was stripping quotes from list items and object keys but not from
