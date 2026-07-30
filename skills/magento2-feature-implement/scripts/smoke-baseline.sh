@@ -8,7 +8,7 @@
 # exception.log-only baseline reports PASS while two of them are on fire:
 #   1. var/log/exception.log            — byte offset + rotation hash (legacy keys, unchanged)
 #   2. every var/log/*.log (+ .log.1)   — byte offset + rotation hash per file
-#   3. var/report/** (recursive)        — path + mtime per existing report file
+#   3. var/report/** (recursive)        — path + mtime (integer microseconds) per report file
 #
 # Magento root resolution order:
 #   1. $2 (explicit)          2. $MAGENTO_ROOT
@@ -25,12 +25,14 @@
 #   magento_root=<absolute path>
 #   log_root=<absolute path>
 #   report_root=<absolute path>
-#   captured_epoch=<float seconds>
+#   captured_epoch=<integer seconds>
+#   reports_scanned_at_us=<integer microseconds, taken before the var/report walk>
+#   reports_truncated=<n>                     # only when the manifest cap was hit
 #   degraded=<reason>                         # only when a section could not be captured
 #   [logs]
 #   log=<abs path>|<size_bytes>|<sha256_of_last_4096>
 #   [reports]
-#   report=<abs path>|<mtime epoch float>
+#   report=<abs path>|<mtime in integer microseconds, truncated>
 #
 # Exit codes:
 #   0 — baseline captured (files may not exist yet — that is recorded, not an error)
@@ -134,8 +136,16 @@ if command -v python3 >/dev/null 2>&1; then
 import hashlib
 import os
 import sys
+import time
 
 out_path, log_root, report_root = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Report mtimes are stored as integer MICROSECONDS, truncated (never rounded, never a float
+# string). A rounded float loses to its own precision: '%.6f' on a real nanosecond mtime can
+# round DOWN, leaving the baseline value below the true mtime, so an untouched report file
+# compares as "refreshed" and fires a spurious gating finding. Truncating both sides to the
+# same integer resolution makes an unchanged file compare exactly equal.
+scanned_at_us = time.time_ns() // 1000
 
 # Cap the report manifest so a var/report with a runaway file count cannot blow up the
 # baseline. Truncation is recorded, never silent: the diff step falls back to mtime-only
@@ -176,12 +186,13 @@ if os.path.isdir(report_root):
                 truncated += 1
                 continue
             try:
-                reports.append('report=%s|%.6f' % (path, os.path.getmtime(path)))
+                reports.append('report=%s|%d' % (path, os.stat(path).st_mtime_ns // 1000))
             except OSError:
                 truncated += 1
     reports.sort()
 
 with open(out_path, 'a', encoding='utf-8') as fh:
+    fh.write('reports_scanned_at_us=%d\n' % scanned_at_us)
     if truncated:
         fh.write('reports_truncated=%d\n' % truncated)
     fh.write('[logs]\n')

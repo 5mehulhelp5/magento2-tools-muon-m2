@@ -103,6 +103,29 @@ if [ -f "$WORK/o2/signals.json" ]; then
     [ "$got" = "0" ] || fail "case 2: expected 0 gating signals, got $got"
 fi
 
+# --- 2b. an untouched report file must never read as "refreshed" ---------------------------
+# Regression: the manifest first stored mtimes as '%.6f', which ROUNDS. On a real nanosecond
+# mtime that can round DOWN, leaving the baseline below the true mtime, so a file nobody touched
+# compared as refreshed and fired a spurious gating finding. The fixture above is touch -d'd to
+# whole seconds and cannot catch it — this case writes with a natural mtime and re-baselines.
+printf '{"0":"natural mtime report","1":"#0 trace","report_id":"nat"}\n' \
+    > "$REPD/ab/cd/ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+"$BASELINE_SH" "$BASE" "$WORK/src" >/dev/null 2>&1 || fail "case 2b: re-baseline failed"
+grep -q '^reports_scanned_at_us=' "$BASE" || fail "case 2b: baseline lost reports_scanned_at_us"
+grep -qE '^report=.*\|[0-9]+$' "$BASE" \
+    || fail "case 2b: report mtimes must be integer microseconds, not a rounded float"
+for pass in 1 2; do
+    rc="$(run_diff "$WORK/o2b$pass")"
+    if [ "$rc" != "0" ]; then
+        fail "case 2b pass $pass: untouched files must produce no signals, got exit $rc"
+        python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1]))
+for f in d['findings']: print('   spurious:',f['severity'],f['category'],f['source'],f['summary'][:80])
+" "$WORK/o2b$pass/signals.json" 2>/dev/null || true
+    fi
+done
+
 # --- 3. new report file, flat layout → gating ---------------------------------------------
 printf '{"0":"Report only, nothing logged","1":"#0 trace","url":"\\/checkout","script_name":"\\/index.php","report_id":"newflat"}\n' \
     > "$REPD/1122334455667788990011223344556677889900112233445566778899001122"

@@ -198,10 +198,14 @@ with open(baseline_path, encoding='utf-8', errors='replace') as fh:
                 base_logs[path] = (0, sha)
         elif section == '[reports]' and line.startswith('report='):
             path, _, mtime = line[7:].partition('|')
+            # Integer microseconds, truncated on both sides — see the note in
+            # smoke-baseline.sh. A float here would be a pre-release baseline; parse it at the
+            # same resolution rather than mixing precisions.
             try:
-                base_reports[path] = float(mtime)
+                base_reports[path] = (int(float(mtime) * 1_000_000) if '.' in mtime
+                                      else int(mtime))
             except ValueError:
-                base_reports[path] = 0.0
+                base_reports[path] = 0
         elif '=' in line:
             k, _, v = line.partition('=')
             keys[k] = v
@@ -214,6 +218,13 @@ try:
 except ValueError:
     captured_epoch = 0.0
 reports_truncated_at_baseline = int(keys.get('reports_truncated', '0') or 0)
+# Precise instant the baseline walked var/report, in the same integer-microsecond resolution as
+# the manifest entries. Used only for files the capped manifest never listed. Falls back to the
+# whole-second captured_epoch, which `date +%s` truncates — hence the +1s guard there.
+try:
+    reports_scanned_at_us = int(keys['reports_scanned_at_us'])
+except (KeyError, ValueError):
+    reports_scanned_at_us = int((captured_epoch + 1) * 1_000_000)
 
 namespaces = [n.strip() for n in namespaces_arg.split(',') if n.strip()]
 surfaces = {s.strip().lower() for s in surfaces_arg.split(',') if s.strip()}
@@ -549,14 +560,15 @@ if not report_root_missing:
         for name in sorted(filenames):
             path = os.path.join(dirpath, name)
             try:
-                mtime = os.path.getmtime(path)
+                mtime_us = os.stat(path).st_mtime_ns // 1000
             except OSError:
                 continue
+            mtime = mtime_us / 1_000_000
             reports_listed += 1
             if path in base_reports:
-                if mtime > base_reports[path]:
+                if mtime_us > base_reports[path]:
                     refreshed_reports.append((path, mtime))
-            elif reports_truncated_at_baseline and mtime <= captured_epoch:
+            elif reports_truncated_at_baseline and mtime_us <= reports_scanned_at_us:
                 # Baseline manifest was capped and this file predates the run.
                 continue
             else:

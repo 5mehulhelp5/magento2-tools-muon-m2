@@ -51,12 +51,20 @@ magento_root=/abs/src
 log_root=/abs/src/var/log
 report_root=/abs/src/var/report
 captured_epoch=1780000000
+reports_scanned_at_us=1780000000123456
 [logs]
 log=/abs/src/var/log/exception.log|12834|ef9c4d2b...
 log=/abs/src/var/log/system.log|31646|aa11bb22...
 [reports]
-report=/abs/src/var/report/ab/cd/aabb…|1780000000.123456
+report=/abs/src/var/report/ab/cd/aabb…|1780000000123456
 ```
+
+Report mtimes are **integer microseconds, truncated** — not a formatted float. A rounded float
+loses to its own precision: `'%.6f'` on a real nanosecond mtime can round *down*, leaving the
+stored value below the true mtime, so a file nobody touched compares as "refreshed" and fires a
+spurious gating finding. Truncating both sides to the same integer resolution makes an unchanged
+file compare exactly equal. `reports_scanned_at_us` is taken *before* the walk and is used only
+for files the capped manifest never listed.
 
 The `sha256_of_last_4096` hashes the last 4 KiB of the file at baseline time (or the whole file
 if shorter). It is the rotation-detection hash: if at diff time the file's bytes ending at
