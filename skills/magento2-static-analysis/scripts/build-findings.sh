@@ -20,7 +20,7 @@
 #                       Pass an absolute or project-root path so an in-`src/` cwd cannot
 #                       redirect output into the Magento tree. See magento2-context/SKILL.md.
 #   OUTPUT_DIR          default: {DOCS_ROOT}/quality
-#   SKILL_VERSION       default: 1.2.0
+#   SKILL_VERSION       default: 1.2.1
 #
 # Output:
 #   Writes {OUTPUT_DIR}/{TARGET_MODULE}-quality-{YYYY-MM-DD}.json (module scope) or
@@ -40,7 +40,7 @@ PHPMD="${PHPMD:-}"
 RECTOR="${RECTOR:-}"
 DOCS_ROOT="${DOCS_ROOT:-.docs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${DOCS_ROOT}/quality}"
-SKILL_VERSION="${SKILL_VERSION:-1.2.0}"
+SKILL_VERSION="${SKILL_VERSION:-1.2.1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMIT_FINDINGS="${SCRIPT_DIR}/../../magento2-context/scripts/emit-findings.sh"

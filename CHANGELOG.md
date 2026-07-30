@@ -6,6 +6,52 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.26.1] — 2026-07-30 — `magento2-static-analysis` reported a false clean
+
+### Fixed
+
+- **`magento2-static-analysis` could report `findings: []` *and* `scanner_errors: []` while all
+  three of its tool passes had failed** — a result indistinguishable from a genuine pass. Found
+  while auditing a real module: the dimension called it clean while phpcs had 38 warnings, phpmd 8
+  violations, and phpstan had never run at all.
+
+  The root cause is one line of design: `run-analysis.sh` wrote each tool's diagnostics to a
+  per-tool `*_ERR` temp file that it **never forwarded**. Since `build-findings.sh` turns this
+  script's *stderr* into `scanner_errors`, and `scanner_errors` is the only channel that
+  distinguishes "checked and clean" from "never ran", three independent parser bugs stayed
+  invisible:
+
+  | Tool | Failure | Effect |
+  |------|---------|--------|
+  | phpcs | PHP_CodeSniffer 3.13.x writes `DEPRECATED: Support for custom tokenizers…` to **stdout ahead of** the `--report=json` payload (triggered by the Magento2 standard's GraphQL custom-tokenizer sniffs), so `json.load()` raised `Expecting value: line 1 column 1` | every violation dropped |
+  | phpmd | the parser iterated a top-level `violations` key PHPMD does not emit — the real shape is `{"files":[{"file":…,"violations":[…]}]}` — so the loop ran zero times **and the JSON parsed cleanly**, raising nothing | every violation dropped |
+  | phpstan | crashed against php.ini's default memory limit, returning `files: []` (a *list*); `.values()` on it raised an uncaught `AttributeError`, and the crash text in `errors` was discarded | entire pass lost, silently |
+
+  All four are fixed: the non-JSON preamble is stripped, phpmd's nested shape is read (taking
+  `fileName` from the parent `file` key), phpstan gets `--memory-limit` (override with
+  `PHPSTAN_MEMORY_LIMIT`) plus a type-guarded `files` and its run-level `errors` surfaced, and every
+  tool's stderr is now forwarded so a failure lands in `scanner_errors`.
+
+### Changed
+
+- **PHPMD now runs against the module's own `phpmd.xml` when it ships one**, falling back to the
+  built-in rulesets. Running the built-ins against a module that deliberately excluded rules
+  re-reported exactly what the project had suppressed — most sharply `_resetState()`, whose name is
+  *mandated* by Magento's `ResetAfterRequestInterface`, tripping `CamelCaseMethodName`. This also
+  aligns the audit with the gate `validate-module.sh` and the seeded module CI already enforce.
+- **PHPMD priority no longer maps to `critical`** (now `1→high, 2→medium, 3→medium, 4→low,
+  5→info`). PHPMD's priority ranks how important a *rule* is, not how severe a *defect* is, and its
+  naming rules ship at priority 1 — so "method is not named in camelCase" became a Critical, which
+  `magento2-audit` turns into a `FAIL` verdict. A lint rule should raise concern without blocking a
+  release on its own.
+
+### Added
+
+- `tests/test-static-analysis-parsers.sh` — hermetic regression test (tools are stubbed, so it runs
+  without phpcs/phpstan/phpmd installed) asserting each parser reads its tool's real output shape,
+  that a lint rule never grades Critical, and that tool stderr reaches `scanner_errors`. Verified to
+  fail against the pre-fix script on all four counts.
+
 ## [1.26.0] — 2026-07-30 — Surface-completeness rule pack
 
 ### Added

@@ -93,6 +93,20 @@ run_phpcs() {
     # phpcs exits 1 when violations found — that is expected; capture output regardless.
     "${run_cmd[@]}" > "$raw_file" 2> "$PHPCS_ERR" || true
 
+    # PHP_CodeSniffer writes deprecation notices to STDOUT, ahead of the --report=json payload:
+    #   DEPRECATED: Support for custom tokenizers will be removed in PHP_CodeSniffer 4.0.
+    #   The Magento2.GraphQL.ValidFieldName sniff is listening for GRAPHQL.
+    # (3.13.x, triggered by the Magento2 standard's custom-tokenizer sniffs.) That makes the file
+    # invalid JSON, so the parser below used to fail and silently fall back to [] — losing every
+    # violation. Drop everything before the first line that starts an object.
+    if [ -s "$raw_file" ] && ! head -c 1 "$raw_file" | grep -q '{'; then
+        sed -n '/^{/,$p' "$raw_file" > "${raw_file}.stripped" 2>/dev/null || true
+        if [ -s "${raw_file}.stripped" ]; then
+            echo "run-analysis/phpcs: stripped non-JSON preamble from phpcs stdout" >> "$PHPCS_ERR"
+            mv "${raw_file}.stripped" "$raw_file"
+        fi
+    fi
+
     python3 - "$raw_file" > "$PHPCS_OUT" 2>> "$PHPCS_ERR" <<'PY'
 import json
 import sys
@@ -147,7 +161,11 @@ run_phpstan() {
         # shellcheck disable=SC2206
         run_cmd=($RUNNER)
     fi
-    run_cmd+=("$PHPSTAN_BIN" analyse --error-format=json --no-progress "$TARGET_PATH")
+    # Without an explicit limit phpstan inherits php.ini's default (commonly 128M) and dies with
+    # "PHPStan process crashed because it reached configured PHP memory limit" on a Magento
+    # codebase, returning {"totals":{"errors":1},"files":[]} — an empty, apparently-clean result.
+    run_cmd+=("$PHPSTAN_BIN" analyse --error-format=json --no-progress
+        "--memory-limit=${PHPSTAN_MEMORY_LIMIT:-2G}" "$TARGET_PATH")
 
     # phpstan exits 1 when errors found — expected.
     "${run_cmd[@]}" > "$raw_file" 2> "$PHPSTAN_ERR" || true
@@ -167,7 +185,19 @@ except Exception as exc:
 
 out = []
 seq = 1
-for file_errors in raw.get('files', {}).values():
+
+# phpstan reports run-level failures (crashes, config errors) in a top-level "errors" list and
+# then returns files: []. Dropping those made a crashed run indistinguishable from a clean one.
+for run_error in raw.get('errors', []) or []:
+    print(f"run-analysis/phpstan: {run_error}", file=sys.stderr)
+
+# "files" is a dict keyed by path on success, but phpstan emits a LIST (usually []) when the run
+# failed. Calling .values() on that raised an uncaught AttributeError, so nothing was written.
+files = raw.get('files', {})
+if not isinstance(files, dict):
+    files = {}
+
+for file_errors in files.values():
     for err in file_errors.get('messages', []):
         ignorable = bool(err.get('ignorable', False))
         out.append({
@@ -202,8 +232,21 @@ run_phpmd() {
         # shellcheck disable=SC2206
         run_cmd=($RUNNER)
     fi
+    # Prefer the module's own ruleset when it ships one. Running the built-in rulesets against a
+    # module that has deliberately excluded rules re-reports exactly what the project chose to
+    # suppress — e.g. `_resetState()`, whose name is MANDATED by Magento's
+    # ResetAfterRequestInterface, trips CamelCaseMethodName. The module ruleset is also what
+    # validate-module.sh and the seeded module CI enforce, so this keeps the audit aligned with
+    # the gate the project actually ships.
+    local phpmd_ruleset="cleancode,codesize,controversial,design,naming,unusedcode"
+    if [ -f "${TARGET_PATH}/phpmd.xml" ]; then
+        phpmd_ruleset="${TARGET_PATH}/phpmd.xml"
+    elif [ -f "phpmd.xml" ]; then
+        phpmd_ruleset="phpmd.xml"
+    fi
+
     run_cmd+=("$PHPMD_BIN_RESOLVED" "$TARGET_PATH" json
-        cleancode,codesize,controversial,design,naming,unusedcode
+        "$phpmd_ruleset"
         "--exclude=${EXCLUDE_PATTERN}")
 
     # phpmd exits 2 when violations found (non-zero).
@@ -222,11 +265,32 @@ except Exception as exc:
     print("[]")
     sys.exit(0)
 
-# phpmd priority: 1=critical, 2=high, 3=medium, 4=low, 5=info
-priority_map = {1: 'critical', 2: 'high', 3: 'medium', 4: 'low', 5: 'info'}
+# PHPMD "priority" ranks how important a RULE is, not how severe a defect is: its naming rules
+# ship at priority 1, so a 1:1 map made "method is not named in camelCase" a Critical. In a
+# consolidated audit that is load-bearing — magento2-audit fails the verdict on any Critical or
+# High — so a style nit would fail every module it touched. A lint rule never warrants Critical;
+# the scale is compressed so PHPMD can raise concern without blocking a release on its own.
+priority_map = {1: 'high', 2: 'medium', 3: 'medium', 4: 'low', 5: 'info'}
 out = []
 seq = 1
-for violation in raw.get('violations', []):
+
+# PHPMD's JSON renderer nests violations under files:
+#   {"files": [{"file": "/abs/path.php", "violations": [{...}, ...]}, ...]}
+# There is NO top-level "violations" key. Reading one meant the loop ran zero times while the
+# JSON still parsed cleanly, so every violation was dropped with no error raised anywhere.
+# Accept the top-level form too, in case a future renderer emits it.
+violations = []
+for file_entry in raw.get('files', []) or []:
+    if not isinstance(file_entry, dict):
+        continue
+    file_name = file_entry.get('file')
+    for violation in file_entry.get('violations', []) or []:
+        if isinstance(violation, dict):
+            violation.setdefault('fileName', file_name)
+            violations.append(violation)
+violations.extend(raw.get('violations', []) or [])
+
+for violation in violations:
     priority = violation.get('priority', 3)
     severity = priority_map.get(priority, 'medium')
     out.append({
@@ -364,6 +428,27 @@ run_phpstan
 run_phpmd
 run_rector_dry
 run_surface_invariants
+
+# Forward each tool's captured stderr to OUR stderr. build-findings.sh turns this script's stderr
+# into the document's `scanner_errors`, which is the only channel that distinguishes "checked and
+# clean" from "never ran". These files were previously written and then dropped on the floor, which
+# is what let three separate parser failures each report findings: [] with scanner_errors: [] —
+# a false clean, the worst failure mode a quality gate has.
+forward_tool_errors() {
+    local name err
+    for name in phpcs phpstan phpmd rector; do
+        case "$name" in
+            phpcs) err="$PHPCS_ERR" ;;
+            phpstan) err="$PHPSTAN_ERR" ;;
+            phpmd) err="$PHPMD_ERR" ;;
+            rector) err="$RECTOR_ERR" ;;
+        esac
+        if [ -s "$err" ]; then
+            echo "run-analysis/${name}: $(tr '\n' ' ' < "$err" | sed 's/  */ /g')" >&2
+        fi
+    done
+}
+forward_tool_errors
 
 # Merge all findings into one array.
 FINDINGS_FILE="${FINDINGS_FILE:-${TMP_DIR}/findings.json}"
