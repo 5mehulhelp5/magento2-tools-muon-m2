@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — Smoke gate: read all three of Magento's error sinks
+## [1.25.0] — 2026-07-30 — Smoke gate: read all three of Magento's error sinks
 
 ### Fixed
 
