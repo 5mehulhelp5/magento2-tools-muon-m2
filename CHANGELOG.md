@@ -6,6 +6,58 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.28.0] — 2026-07-30 — `magento2-security-audit` now reads Adobe's own patch verdict
+
+### Added
+
+- **`cve-scan.sh` consults `vendor/bin/patch-status` when the store ships it**, and treats its
+  per-CVE verdict as authoritative over the curated filesystem signatures.
+
+  Found while auditing a real module. The store had just applied Adobe patch
+  `249-2026-07-001-CE`; `vendor/bin/patch-status` reported all 12 advisories `PROTECTED` or
+  `NOT_APPLICABLE`, and the scanner still reported every one of them as `needs-triage` with
+  `patch-state:no-signature`. Nothing was wrong with the signature logic — it simply had no curated
+  `patched_signature`/`vulnerable_signature` pair for the July-2026 advisories, and `composer.lock`
+  cannot see patch state. The result was 12 unactionable findings, one of them Critical, on a store
+  that was fully patched.
+
+  `patch-status` ships *inside* the security patches and consults Adobe's advisory registry, so it
+  answers the question directly and for every advisory in that registry — not only the ones we have
+  hand-curated. It therefore takes precedence, with the signatures retained as the fallback for
+  stores that do not have the tool.
+
+  | `patch-status` verdict | Scanner behaviour |
+  |---|---|
+  | `PROTECTED` | patch applied — not a finding |
+  | `NOT_APPLICABLE` | store was never affected (wrong edition, component absent) — not a finding |
+  | `VULNERABLE` | proven unpatched — strictly better evidence than an in-range version number |
+  | `UNKNOWN`, unrecognised, or CVE absent | **no opinion** — defer to the curated signatures |
+
+  Findings now carry a `patch-state-source:` tag (`patch-status` / `signature` / `none`) so a reader
+  can tell an authoritative verdict from a curated one, and so `no-signature` is not silently
+  conflated with "not checked".
+
+### Changed
+
+- **`RUNNER` is now honoured by `magento2-security-audit`** (default `""`). `patch-status` is PHP
+  and shells out to `patch(1)`, so on a Dockerised stack it only works inside the app container —
+  `RUNNER="docker compose exec -T -u magento php"`. Existence is probed on the **host** (vendor/ is
+  bind-mounted) while execution goes through the runner, mirroring
+  `magento2-static-analysis/scripts/run-analysis.sh`.
+- **`CVE_PATCH_STATUS=0`** opts out entirely, for operators who would rather the scanner did not
+  execute a binary from the tree it is scanning.
+
+### Notes
+
+- **The tool's exit code is not a success signal.** Run on a host without `patch(1)` it prints
+  `patch-status: patch(1) binary not found` and still **exits 0**. Validity is therefore decided by
+  parsing the JSON and requiring a dict-valued `vulnerability_status` — never by `$?`. A tool that
+  is present but unusable writes an explanatory line to stderr, which `build-findings.sh` surfaces
+  in `scanner_errors`, and the scan falls back to signatures rather than silently reporting clean.
+- Fully degrading: no tool, disabled, unreadable output, malformed JSON, or a CVE the registry does
+  not mention all leave the previous behaviour exactly intact.
+- **`magento2-security-audit` 1.6.0 → 1.7.0 — new CVE source.**
+
 ## [1.27.0] — 2026-07-30 — `magento2-static-analysis` reported a false clean
 
 ### Fixed
