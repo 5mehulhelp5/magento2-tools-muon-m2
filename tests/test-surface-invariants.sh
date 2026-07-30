@@ -155,6 +155,23 @@ class Exporter
 }
 EOF
 
+# SI-05 also has to see through PHP 8 constructor property promotion: the visibility modifier
+# precedes the type, so the parameter still reads `CacheInterface $cache`.
+cat > "$D/Service/PromotedExporter.php" <<'EOF'
+<?php
+declare(strict_types=1);
+namespace Acme\Dirty\Service;
+
+use Magento\Framework\App\CacheInterface;
+
+class PromotedExporter
+{
+    public function __construct(private CacheInterface $cache)
+    {
+    }
+}
+EOF
+
 # SI-06 — grid collection registered but it is a plain entity collection.
 # SI-10 — that registration lives in the adminhtml-area di.xml instead of etc/di.xml.
 cat > "$D/etc/adminhtml/di.xml" <<'EOF'
@@ -168,6 +185,11 @@ cat > "$D/etc/adminhtml/di.xml" <<'EOF'
     </arguments>
   </type>
   <type name="Acme\Dirty\Service\Exporter">
+    <arguments>
+      <argument name="cache" xsi:type="object">Acme\Dirty\Model\Cache\ExportCache</argument>
+    </arguments>
+  </type>
+  <type name="Acme\Dirty\Service\PromotedExporter">
     <arguments>
       <argument name="cache" xsi:type="object">Acme\Dirty\Model\Cache\ExportCache</argument>
     </arguments>
@@ -614,7 +636,7 @@ if [ ! -f "$WORK/dirty.json" ]; then
     fail "no findings file produced for the dirty fixture"
 else
     got="$(ids_of "$WORK/dirty.json")"
-    want="SI-01 SI-02 SI-03 SI-04 SI-05 SI-06 SI-07 SI-08 SI-09 SI-09 SI-10 SI-11 SI-12"
+    want="SI-01 SI-02 SI-03 SI-04 SI-05 SI-05 SI-06 SI-07 SI-08 SI-09 SI-09 SI-10 SI-11 SI-12"
     [ "$got" = "$want" ] || fail "dirty fixture rule ids
   want: $want
   got:  $got"
@@ -653,7 +675,7 @@ import json,sys
 want = {
  'SI-01': 'etc/communication.xml', 'SI-02': 'etc/communication.xml',
  'SI-03': 'etc/queue_consumer.xml', 'SI-04': 'Model/Cache/ExportCache.php',
- 'SI-05': 'Service/Exporter.php',   'SI-06': 'Model/ResourceModel/Widget/Collection.php',
+ 'SI-05': 'Exporter.php',           'SI-06': 'Model/ResourceModel/Widget/Collection.php',
  'SI-07': 'view/adminhtml/ui_component/acme_dirty_widget_form.xml',
  'SI-08': 'view/adminhtml/ui_component/acme_dirty_widget_form.xml',
  'SI-09': 'etc/acl.xml', 'SI-10': 'etc/adminhtml/di.xml', 'SI-12': 'etc/acl.xml',
@@ -697,6 +719,85 @@ grep -qi "acl" "$WORK/novendor.stderr" \
 ids="$(ids_of "$WORK/novendor.json" 2>/dev/null || echo '')"
 case "$ids" in
     *SI-09*) fail "SI-09 must not be asserted when the ACL reference set is unavailable" ;;
+esac
+
+# --- a nameless <argument> cannot be tied to a parameter: skip loudly, never guess ---------
+# An <argument> with no name= is invalid per the DI XSD, but guessing which parameter it feeds
+# blamed the first typed one and produced a false SI-05.
+N="$WORK/app/code/Acme/Nameless"
+mkdir -p "$N/etc" "$N/Model/Cache" "$N/Service"
+cat > "$N/etc/module.xml" <<'EOF'
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Module/etc/module.xsd">
+  <module name="Acme_Nameless"/>
+</config>
+EOF
+cat > "$N/etc/cache.xml" <<'EOF'
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Cache/etc/cache.xsd">
+  <type name="acme_nameless" translate="label,description" instance="Acme\Nameless\Model\Cache\C">
+    <label>L</label>
+    <description>D</description>
+  </type>
+</config>
+EOF
+cat > "$N/Model/Cache/C.php" <<'EOF'
+<?php
+declare(strict_types=1);
+namespace Acme\Nameless\Model\Cache;
+
+use Magento\Framework\Cache\Frontend\Decorator\TagScope;
+
+class C extends TagScope
+{
+    public const TYPE_IDENTIFIER = 'acme_nameless';
+}
+EOF
+cat > "$N/Service/S.php" <<'EOF'
+<?php
+declare(strict_types=1);
+namespace Acme\Nameless\Service;
+
+use Magento\Framework\App\CacheInterface;
+
+class S
+{
+    public function __construct(CacheInterface $other, string $flag = 'x')
+    {
+    }
+}
+EOF
+cat > "$N/etc/di.xml" <<'EOF'
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+  <type name="Acme\Nameless\Service\S">
+    <arguments>
+      <argument xsi:type="object">Acme\Nameless\Model\Cache\C</argument>
+    </arguments>
+  </type>
+</config>
+EOF
+rc="$(run_checker "$N" "$WORK/nameless.json")"
+[ "$rc" = "0" ] || fail "nameless-argument fixture: checker exited $rc"
+got="$(ids_of "$WORK/nameless.json" 2>/dev/null || echo '')"
+case "$got" in
+    *SI-05*) fail "a nameless <argument> must not produce SI-05 (it blamed the first parameter), got: $got" ;;
+esac
+grep -q "no name" "$WORK/nameless.json.stderr"     || fail "skipping a nameless <argument> must be reported on stderr, got: $(cat "$WORK/nameless.json.stderr")"
+
+# --- MAGENTO_ROOT is auto-detected from cwd, as the script documents -----------------------
+# Without it a standalone run silently degrades SI-09 — an admin-lockout class — even with a
+# vendor/ tree sitting right there.
+rc=0
+( cd "$WORK" && TARGET_PATH="$D" SCAN_ROOT="$WORK/app/code" \
+    FINDINGS_FILE="$WORK/autodetect.json" bash "$CHECKER" >/dev/null 2>"$WORK/autodetect.err" ) || rc=$?
+[ "$rc" = "0" ] || fail "auto-detect: checker exited $rc with MAGENTO_ROOT unset"
+grep -qi "reference set is unavailable" "$WORK/autodetect.err" \
+    && fail "MAGENTO_ROOT should have been auto-detected from cwd, but the ACL reference set was reported unavailable"
+ids="$(ids_of "$WORK/autodetect.json" 2>/dev/null || echo '')"
+case "$ids" in
+    *SI-09*) : ;;
+    *) fail "with vendor/ in cwd and MAGENTO_ROOT unset, SI-09 must be decided; got: $ids" ;;
 esac
 
 # --- a module with none of these surfaces is silent, not skipped-with-noise ----------------

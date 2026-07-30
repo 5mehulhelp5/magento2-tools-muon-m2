@@ -64,7 +64,29 @@ import xml.etree.ElementTree as ET
 
 target = os.environ['TARGET_PATH'].rstrip('/')
 scan_root = os.environ.get('SCAN_ROOT') or os.path.dirname(os.path.dirname(target))
-magento_root = os.environ.get('MAGENTO_ROOT') or ''
+def detect_magento_root():
+    """Find the tree holding vendor/. Documented behaviour, so it must actually happen: without
+    it a standalone run reports SI-09 as 'not checked' even when vendor/ is right there."""
+    env = os.environ.get('MAGENTO_ROOT') or ''
+    if env:
+        return env
+    for cand in ('src', '.'):
+        if os.path.isdir(os.path.join(cand, 'vendor', 'magento')) or \
+                os.path.isdir(os.path.join(cand, 'vendor')):
+            return cand
+    # Walk up from the module: app/code/V/M and vendor/<v>/module-x both sit under the root.
+    here = os.path.abspath(target)
+    for _ in range(8):
+        parent = os.path.dirname(here)
+        if parent == here:
+            break
+        if os.path.isdir(os.path.join(parent, 'vendor', 'magento')):
+            return parent
+        here = parent
+    return ''
+
+
+magento_root = detect_magento_root()
 date = os.environ['DATE']
 id_prefix = os.environ['ID_PREFIX']
 seq = int(os.environ['SEQ_START'])
@@ -411,6 +433,12 @@ if tagscope_classes:
                 if value not in tagscope_classes:
                     continue
                 arg_name = arg.get('name')
+                if not arg_name:
+                    # Nameless <argument> (invalid per the DI XSD). We cannot know which
+                    # parameter it feeds, and guessing blamed the first typed one.
+                    warn('%s has an <argument> with no name= feeding %s — SI-05 cannot be '
+                         'decided for it' % (di_rel, consumer_cls))
+                    continue
                 target_file = class_index.get(consumer_cls)
                 if not target_file:
                     continue  # class lives outside this module — cannot judge its signature
@@ -418,7 +446,9 @@ if tagscope_classes:
                 ctor = re.search(r'function\s+__construct\s*\((.*?)\)\s*\{', ctext, re.S)
                 if not ctor:
                     continue
-                pm = re.search(r'([\w\\]+)\s+\$%s\b' % re.escape(arg_name or ''), ctor.group(1))
+                # Matches a promoted property too — `private CacheInterface $cache` — because
+                # the visibility modifier precedes the type, which is all this pattern needs.
+                pm = re.search(r'([\w\\]+)\s+\$%s\b' % re.escape(arg_name), ctor.group(1))
                 if not pm:
                     continue
                 hint = pm.group(1).lstrip('\\')
