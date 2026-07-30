@@ -53,7 +53,24 @@ OUT="$1"
 ROOT_ARG="${2:-${MAGENTO_ROOT:-}}"
 
 abspath() {
-  readlink -f "$1" 2>/dev/null || python3 -c "import os,sys; print(os.path.abspath(sys.argv[1]))" "$1"
+  # Must work without python3: the degraded mode this script documents (no python3 → legacy
+  # keys only) is unreachable if path resolution itself needs python3. Also handles a
+  # not-yet-existent target — GNU `readlink -f` requires every parent to exist, which a fresh
+  # install without var/log/ does not satisfy — and BSD readlink, which has no -f at all.
+  local p="$1" d b
+  if readlink -f "$p" 2>/dev/null; then
+    return 0
+  fi
+  d="$(dirname "$p")"
+  b="$(basename "$p")"
+  if [[ -d "$d" ]]; then
+    printf '%s/%s\n' "$(cd "$d" && pwd -P)" "$b"
+    return 0
+  fi
+  case "$p" in
+    /*) printf '%s\n' "$p" ;;
+    *)  printf '%s/%s\n' "$(pwd -P)" "${p#./}" ;;
+  esac
 }
 
 resolve_root() {

@@ -89,7 +89,9 @@ Source 1 — exception.log
 5. Save to smoke/raw/S8/exception-diff.log — the artefact path is unchanged.
 
 Source 2 — every other var/log/*.log (+ .log.1)
-6. File absent from the baseline manifest → created during the run → scan from byte 0.
+6. File absent from the baseline manifest → created during the run → scan from byte 0, EXCEPT
+   a `{name}.log.1` whose `{name}.log` was baselined: that is a mid-run rotation, so inherit the
+   parent's baseline offset (else every pre-baseline error in it resurfaces as new).
 7. Otherwise same byte-offset + rotation logic as source 1; per-file diffs land in
    smoke/raw/S8/logs/{name}.diff.
 8. Parse each group's Monolog level and apply the policy table below.
@@ -159,8 +161,10 @@ Smoke exception ignore:
   - A symlink for .* already exists
 ```
 
-Each line under `Smoke exception ignore:` is a PCRE pattern. A group (or report message) matching
-**any** pattern is demoted to Medium, marked `allowlisted`, and stops gating. The skill reads
+Each line under `Smoke exception ignore:` is a **Python `re`** pattern — the engine S8 actually
+compiles them with. It is close to PCRE but not identical: `\K`, recursion and possessive
+quantifiers do not exist, so do not port a PCRE-only construct here. A group (or report message)
+matching **any** pattern is demoted to Medium, marked `allowlisted`, and stops gating. The skill reads
 CLAUDE.md at S1, writes the patterns to `smoke/allowlist.txt`, and passes
 `--allowlist=smoke/allowlist.txt` at S8. An invalid pattern is reported in `degraded[]` — it is
 never silently skipped.
@@ -190,7 +194,9 @@ no silent truncation.
 ## What does NOT count as a finding
 
 - Lines that pre-date the baseline (i.e. existed before S1) — those were already there and are
-  not the smoke run's responsibility.
+  not the smoke run's responsibility. This includes a log that rotates *during* the run: the new
+  `{name}.log.1` is the file we baselined under its old name, so it is read from the pre-rotation
+  baseline offset, not from byte 0. Only a `.log.1` with no baselined parent is scanned whole.
 - NOTICE / INFO / DEBUG in any log, and WARNING outside `system.log`/module channels.
 - `debug.log` at any level as a *gate* — it mirrors the other handlers, so gating on it would
   double-count. ERROR+ there is still recorded.

@@ -246,6 +246,30 @@ rc="$(run_diff "$WORK/o13a")"
 rc="$(run_diff "$WORK/o13b" --surfaces=cron)"
 [ "$rc" = "1" ] || fail "case 13b (cron ERROR, cron surface declared): expected exit 1, got $rc"
 
+# --- 13c. a non-exception log rotating mid-run must not resurface pre-baseline errors -------
+# When system.log rotates during the run, the new system.log.1 IS the file we baselined, under a
+# new name. Scanning it from byte 0 would report every pre-baseline error in it as a fresh
+# finding. Only the bytes past the pre-rotation baseline offset are new.
+printf '[2026-07-30T00:20:00.000000+00:00] main.CRITICAL: OLD pre-baseline fault in Acme\\Widget\\Model\\Alpha [] []\n' \
+    >> "$LOGD/system.log"
+"$BASELINE_SH" "$BASE" "$WORK/src" >/dev/null 2>&1 || fail "case 13c: re-baseline failed"
+printf '[2026-07-30T00:21:00.000000+00:00] main.CRITICAL: NEW post-baseline fault in Acme\\Widget\\Model\\Beta [] []\n' \
+    >> "$LOGD/system.log"
+mv "$LOGD/system.log" "$LOGD/system.log.1"
+printf '[2026-07-30T00:22:00.000000+00:00] main.INFO: fresh file after rotation [] []\n' > "$LOGD/system.log"
+rc="$(run_diff "$WORK/o13c" --namespace=Acme_Widget)"
+[ "$rc" = "1" ] || fail "case 13c (log rotated mid-run): expected exit 1, got $rc"
+if [ -f "$WORK/o13c/signals.json" ]; then
+    if ! grep -q "NEW post-baseline fault" "$WORK/o13c/signals.json"; then
+        fail "case 13c: post-rotation new bytes must still be reported"
+    fi
+    if grep -q "OLD pre-baseline fault" "$WORK/o13c/signals.json"; then
+        fail "case 13c: pre-baseline bytes resurfaced from the rotated-away file"
+    fi
+fi
+rm -f "$LOGD/system.log.1"
+: > "$LOGD/system.log"
+
 # --- 14. a pre-manifest baseline must exit 5 (degraded), never 0 ----------------------------
 # An older smoke-baseline.sh wrote only the four legacy keys. Reading that as a clean run would
 # reinstate exactly the false PASS this whole change exists to remove.

@@ -63,9 +63,12 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   windowed on `SINCE_TS` (the deploy start; absent, a 15-minute default that says so in the
   detail). Previously the post-deploy smoke checked module status, DB status and HTTP codes only —
   a deploy that broke a plugin's DI wiring passed clean.
-- `tests/test-smoke-signals.sh` — 12 cases over a fixture tree: nested and `api/` reports, a
-  report rewritten in place, a log file created mid-run, rotation, INFO-only churn, unattributed
-  vs attributed errors, malformed baseline, and the legacy `exception-diff.log` byte contract.
+- `tests/test-smoke-signals.sh` — 16 cases over a fixture tree: nested and `api/` reports, a
+  report rewritten in place (and one untouched, which must stay silent), a log file created
+  mid-run, `exception.log` rotation, another log rotating mid-run (its `.log.1` must not
+  resurface pre-baseline errors), 500-line INFO churn, attributed vs unattributed errors,
+  surface-conditional cron gating, a malformed baseline, a pre-manifest baseline (must exit 5,
+  never 0), and the legacy `exception-diff.log` byte contract.
 
 ### Changed
 

@@ -12,8 +12,11 @@
 #                        background noise (Medium, recorded only) unless it is CRITICAL+.
 #   --surfaces=<list>    comma-separated surfaces the feature declares (cron,queue). Makes
 #                        ERROR+ in cron/consumer logs gating instead of merely recorded.
-#   --allowlist=<path>   file of PCRE patterns (one per line, `#` comments allowed) — a group
-#                        whose first line matches is demoted to Medium and marked allowlisted.
+#   --allowlist=<path>   file of Python `re` patterns (one per line, `#` comments allowed) — a
+#                        group whose first line matches is demoted to Medium and marked
+#                        allowlisted. Python `re` is close to PCRE but not identical: `\K`,
+#                        recursion and possessive quantifiers are unsupported and an invalid
+#                        pattern is reported in signals.json `degraded[]`, never skipped.
 #
 # Signals, all three diffed against the baseline:
 #   1. var/log/exception.log   — byte range [baseline_size .. EOF], rotation-aware (unchanged)
@@ -37,8 +40,12 @@
 #   5 — scan degraded (python3 unavailable, or baseline captured without manifest sections):
 #       the exception.log diff is still written, but sources 2 and 3 were NOT checked. Treat as
 #       a Medium finding in its own right — do not read it as a clean run.
+#
+# `set -e` is on: a failed stat/tail/read must abort loudly rather than fall through to a
+# "no signals" verdict on empty artefacts. It is disabled only around the python classifier,
+# whose exit code IS the result and is propagated deliberately.
 
-set -uo pipefail
+set -euo pipefail
 
 if [[ "${1:-}" == "" || "${2:-}" == "" ]]; then
   echo "usage: $0 <baseline-file> <output-diff-file> [--json=<path>] [--namespace=<list>] [--surfaces=<list>] [--allowlist=<path>]" >&2
@@ -473,8 +480,20 @@ for path in live_logs:
 
     created = path not in base_logs
     base_size, base_sha = base_logs.get(path, (0, '0'))
+    inherited_offset = False
+    if created and name.endswith('.log.1'):
+        # A `.log.1` that was not in the baseline is not new content — it IS the file we
+        # baselined, renamed by a rotation mid-run. Scanning it from byte 0 would re-surface
+        # every pre-baseline error in it as a fresh finding. Inherit the parent log's baseline
+        # offset, exactly as the exception.log path does for its own `.1`.
+        parent = path[:-2]
+        if parent in base_logs:
+            base_size, base_sha = base_logs[parent]
+            created = False
+            inherited_offset = True
+
     rotated = False
-    if not created and live_size >= base_size and base_size > 0:
+    if not created and live_size >= base_size and base_size > 0 and not inherited_offset:
         try:
             if tail_sha(path, base_size) != base_sha:
                 rotated = True
@@ -509,6 +528,9 @@ for path in live_logs:
             fh.write('# ROTATION DETECTED: re-read from byte 0\n')
         if created:
             fh.write('# CREATED DURING RUN: whole file is new\n')
+        if inherited_offset:
+            fh.write('# ROTATED INTO PLACE MID-RUN: read from the pre-rotation baseline '
+                     'offset %d, not byte 0\n' % start)
         fh.write(text)
 
     log_summaries.append({
