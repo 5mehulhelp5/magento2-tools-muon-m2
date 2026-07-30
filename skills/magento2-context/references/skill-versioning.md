@@ -33,7 +33,7 @@ skills evolve.
 | magento2-system-config     | 1.1.3   | New field type/template, config-reader pattern change                         |
 | magento2-cli-command       | 1.1.2   | New mode/template, command or cron pattern change                             |
 | magento2-message-queue     | 1.1.3   | New connection type/template, topic or consumer pattern change                |
-| magento2-static-analysis   | 1.2.0   | New tool/rule, autofix-safety calibration change                              |
+| magento2-static-analysis   | 1.3.0   | New tool/rule, autofix-safety or severity calibration change                  |
 | magento2-docs-generate     | 1.3.1   | New docs (developer/user guide, REST+GraphQL reference), example/diagram derivation |
 | magento2-indexer           | 1.1.2   | New indexer/mview pattern, dimension support                                  |
 | magento2-marketplace-prep  | 1.1.0   | New EQP check, readiness-scoring calibration                                  |
@@ -182,6 +182,20 @@ skills evolve.
   `magento2-module-upgrade` now routes through the shared emitter (gains SARIF). New
   `magento2-audit@1.0.0` orchestrator consolidates every findings dimension into one ranked report +
   merged SARIF.
+- **Plugin 1.27.0 — The static-analysis gate reported a false clean.** All three of
+  `magento2-static-analysis`'s tool passes could fail while the document still read
+  `findings: []` with `scanner_errors: []` — indistinguishable from a genuine pass. `run-analysis.sh`
+  wrote each tool's diagnostics to a `*_ERR` temp file it never forwarded, and that stderr is the
+  only channel `build-findings.sh` turns into `scanner_errors`, so three independent parser bugs
+  (phpcs's stdout deprecation preamble breaking `json.load()`; phpmd's real shape nesting violations
+  under `files[]`, not a top-level `violations` key; phpstan returning `files: []` as a *list* after
+  a memory-limit crash) stayed invisible — two of them raised nothing anywhere. Turning the parsers
+  back on then made severity calibration load-bearing: phpmd is now **capped at `medium`**, because
+  `magento2-audit` blocks its verdict on Critical *and* High alike, so the obvious
+  critical→high demotion would have kept failing every module on `_resetState()` —
+  a name `ResetAfterRequestInterface` mandates. phpmd also prefers the module's own `phpmd.xml`
+  when it ships one, recorded as provenance. Minor bump (severity calibration + new env input):
+  `magento2-static-analysis 1.2.0 → 1.3.0`.
 - **Plugin 1.26.0 — Surface-completeness rule pack.** `magento2-static-analysis` gained
   `scripts/surface-invariants.sh`: 12 cross-file rules (`category: surface`, rule ids SI-01…SI-12)
   that assert a surface's file SET is complete, which no single-file linter can see. Every rule was
