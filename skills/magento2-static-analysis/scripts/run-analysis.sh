@@ -57,6 +57,7 @@ PHPCS_OUT="${TMP_DIR}/phpcs.json"
 PHPSTAN_OUT="${TMP_DIR}/phpstan.json"
 PHPMD_OUT="${TMP_DIR}/phpmd.json"
 RECTOR_OUT="${TMP_DIR}/rector.json"
+SURFACE_OUT="${TMP_DIR}/surface.json"
 PHPCS_ERR="${TMP_DIR}/phpcs.err"
 PHPSTAN_ERR="${TMP_DIR}/phpstan.err"
 PHPMD_ERR="${TMP_DIR}/phpmd.err"
@@ -69,6 +70,7 @@ echo "[]" > "$PHPCS_OUT"
 echo "[]" > "$PHPSTAN_OUT"
 echo "[]" > "$PHPMD_OUT"
 echo "[]" > "$RECTOR_OUT"
+echo "[]" > "$SURFACE_OUT"
 
 # ---------------------------------------------------------------------------
 # phpcs — detect coding-standard violations (read-only)
@@ -322,16 +324,51 @@ print(json.dumps(out, indent=2))
 PY
 }
 
+# ---------------------------------------------------------------------------
+# surface invariants — cross-file completeness checks (no external tool needed)
+# ---------------------------------------------------------------------------
+run_surface_invariants() {
+    # Module scope only: every rule reasons about ONE module's file set (a topic here needs a
+    # publisher there). At site/diff scope the caller should invoke it per changed module.
+    if [ "$SCOPE" != "module" ]; then
+        echo "run-analysis/surface-invariants: scope '$SCOPE' is not module — surface \
+completeness was NOT checked; invoke per module to cover it" >&2
+        return
+    fi
+    local magento_root=""
+    if [ -d "src/vendor" ]; then
+        magento_root="src"
+    elif [ -d vendor ]; then
+        magento_root="."
+    fi
+    TARGET_PATH="$TARGET_PATH" \
+    SCAN_ROOT="${SCAN_ROOT:-}" \
+    MAGENTO_ROOT="$magento_root" \
+    FINDINGS_FILE="$SURFACE_OUT" \
+        bash "${SCRIPT_DIR}/surface-invariants.sh" >/dev/null || true
+    # stderr is deliberately NOT captured to a temp file: build-findings.sh turns this script's
+    # stderr into the document's `scanner_errors`, which is the only channel that distinguishes
+    # "checked and clean" from "not checked". (The older *_ERR temp files above are written but
+    # never forwarded — a pre-existing gap, left alone here rather than changing four scanners'
+    # reporting behaviour in a change about surface completeness.)
+    if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SURFACE_OUT" 2>/dev/null; then
+        echo "run-analysis/surface-invariants: produced invalid JSON — surface completeness \
+findings were dropped" >&2
+        echo "[]" > "$SURFACE_OUT"
+    fi
+}
+
 # Run all scanners.
 run_phpcs
 run_phpstan
 run_phpmd
 run_rector_dry
+run_surface_invariants
 
 # Merge all findings into one array.
 FINDINGS_FILE="${FINDINGS_FILE:-${TMP_DIR}/findings.json}"
 
-python3 - "$PHPCS_OUT" "$PHPSTAN_OUT" "$PHPMD_OUT" "$RECTOR_OUT" > "$FINDINGS_FILE" <<'PY'
+python3 - "$PHPCS_OUT" "$PHPSTAN_OUT" "$PHPMD_OUT" "$RECTOR_OUT" "$SURFACE_OUT" > "$FINDINGS_FILE" <<'PY'
 import json
 import sys
 

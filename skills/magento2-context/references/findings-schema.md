@@ -166,7 +166,10 @@ requires updating this schema and the JSON emitter.
 
 `style` (phpcs/phpcbf/php-cs-fixer violations) | `complexity` (phpmd) |
 `type` (phpstan type errors) | `dead-code` (phpmd/rector dead-code) |
-`refactoring` (rector safe/review transforms)
+`refactoring` (rector safe/review transforms) |
+`surface` (cross-file completeness invariants — an individually-valid file set that is
+incomplete as a surface; `subcategory` carries the rule id `SI-nn`, see
+`magento2-static-analysis/references/surface-invariants.md`)
 
 ### magento2-marketplace-prep
 

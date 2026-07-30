@@ -61,12 +61,24 @@ Run every available tool in **read-only / dry-run mode** using
 `${CLAUDE_SKILL_DIR}/scripts/run-analysis.sh`. Aggregate violations into a findings
 JSON array.
 
+The pass also runs the **surface-invariant** rules (`category: surface`) — cross-file
+completeness checks that need no external tool, so they run even where phpcs/phpstan are
+absent. They catch the class of defect the tool-driven scanners structurally cannot: a surface
+whose files are each individually valid but incomplete as a set (a queue topic with no
+publisher, a grid collection without the SearchResult bridge, an ACL id re-declared under the
+wrong parent — an admin lockout). Every rule came from a real bug report; see
+`references/surface-invariants.md`. None of them are auto-fixable — each needs a decision about
+which file to add or which type to change.
+
 Present the fix plan to the user showing:
 
 - Total violations found per tool
 - Which violations are **auto-fixable** (phpcbf, php-cs-fixer, safe rector rules)
-- Which violations are **manual-only** (phpstan level errors, phpmd, risky rector)
+- Which violations are **manual-only** (phpstan level errors, phpmd, risky rector, and every
+  `surface` finding)
 - Estimated residual count after auto-fix
+- Any `scanner_errors` entry — a scanner that degraded checked **nothing**, which is not the
+  same as finding nothing. Surface rules that could not be decided report there by name.
 
 **WAIT for the user to type "proceed" before changing any file.** This gate is
 mandatory. A write skill that touches files without explicit approval is a defect.
@@ -109,6 +121,9 @@ Write three artifacts:
 ## Reference Files
 
 - `references/tool-matrix.md` — which tool detects vs fixes what; run command for each.
+- `references/surface-invariants.md` — the cross-file completeness rule pack (SI-01…SI-12): what
+  each rule asserts, the bug report it came from, and the two false-positive classes to avoid
+  when adding one.
 - `references/autofix-safety.md` — safe vs review-required transforms.
 - `references/ci-integration.md` — running as a CI gate; SARIF upload; `--diff` PR gating.
 - `magento2-context/references/findings-schema.md` — finding shape, `outputKind=quality`.
@@ -119,6 +134,9 @@ Write three artifacts:
 
 - `${CLAUDE_SKILL_DIR}/scripts/run-analysis.sh` — orchestrates read-only tool passes;
   outputs findings JSON array.
+- `${CLAUDE_SKILL_DIR}/scripts/surface-invariants.sh` — the tool-free cross-file completeness
+  rules; module scope only (each rule reasons about one module's file set, so a site/diff run
+  must invoke it per changed module). Run by `run-analysis.sh`; standalone-callable.
 - `${CLAUDE_SKILL_DIR}/scripts/apply-fixes.sh` — runs safe fixers (phpcbf, php-cs-fixer
   only); never touches `vendor/`. Rector is never auto-applied.
 - `${CLAUDE_SKILL_DIR}/scripts/build-findings.sh` — assembles residual findings into the
