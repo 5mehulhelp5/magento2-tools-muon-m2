@@ -83,8 +83,16 @@ Goal: have enough information to attempt reproduction.
     - `var/log/system.log`
     - `var/log/exception.log`
     - `var/log/debug.log`
-    - Any module-specific log mentioned in the symptom.
-4. Grep logs for the symptom signature.
+    - `var/report/**` — recursive, including `var/report/api/`. A report file is often the ONLY
+      record: `Webapi\ErrorProcessor::apiShutdownFunction()` writes `var/report/api/{id}` on a
+      PHP fatal with no logger call at all.
+    - Any module-specific log mentioned in the symptom (`ls -t var/log/*.log | head`).
+4. Grep logs for the symptom signature. When the user says "the error is not in the logs",
+   treat that as a routing fact, not a dead end: `exception.log` receives a record only when
+   `context['exception']` is set, so string-level criticals (e.g. the ObjectManager's
+   `Type Error occurred when creating object: …`) are in `system.log` instead. See
+   `magento2-debug/references/log-locations.md` §"What to Search When the Symptom Is
+   'No Log Entry'".
 
 Save the initial collection notes to `{output_root}/bug-fixes/{slug}/collect.md`.
 

@@ -32,6 +32,8 @@ between iterations; they reset only between feature runs.
 | F2 | Critical | php_exception | 1 | 1 | S8 | `Class Vendor\Xyz\Foo not found` in exception.log | magento2-debug → magento2-bug-fix | 2 | Class name typo in di.xml |
 | F3 | High | frontend | 1 | 3 | S7 | New My Account tab "Vehicles" fails to load — uncaught reference error in vehicle.js | magento2-frontend-create | — | Still open; cap reached |
 | F4 | Medium | performance | 1 | 1 | S6 | New admin grid renders in 2.3s (target 2.0s) | magento2-performance-audit | n/a | Recorded; not loop-gating |
+| F5 | Critical | log_error | 1 | 1 | S8 | `Type Error occurred when creating object: Vendor\Xyz\Plugin\Foo` in system.log ×4 — never reached exception.log | magento2-debug → magento2-bug-fix | 2 | Constructor arg missing from di.xml; signature `main.CRITICAL: Type Error occurred when creating object: Vendor\Xyz\Plugin\Foo, Too few arguments` |
+| F6 | High | report_file | 1 | 1 | S8 | New `var/report/api/N` after POST /V1/... — PHP fatal, no log entry at all | magento2-debug → magento2-bug-fix | — | Decoded copy in `smoke/raw/S8/reports/` |
 
 ---
 
@@ -58,5 +60,15 @@ between iterations; they reset only between feature runs.
 
 ## Categories
 
-`rest_contract`, `php_exception`, `frontend`, `controller`, `layout`, `grid`, `config_save`,
-`customer_flow`, `performance`, `security`, `schema`, `other`.
+`rest_contract`, `php_exception`, `log_error`, `log_warning`, `log_unparsed`, `log_missing`,
+`log_unreadable`, `report_file`, `frontend`, `controller`, `layout`, `grid`, `config_save`,
+`customer_flow`, `performance`, `security`, `schema`, `smoke_coverage`, `other`.
+
+The S8 categories map 1:1 to `signals.json`: `php_exception` (exception.log group),
+`log_error`/`log_warning` (another `var/log/*.log` at ERROR+/WARNING), `report_file` (a new or
+refreshed `var/report/**` file), `log_unparsed`/`log_missing`/`log_unreadable` (scan integrity),
+and `smoke_coverage` (S8 exited 5 — only `exception.log` was checked).
+
+Findings sourced from S8 carry the `signature` from `signals.json` in the Notes column. That
+signature — not the line text — is what matches a finding across iterations, since timestamps
+and ids differ on every recurrence.

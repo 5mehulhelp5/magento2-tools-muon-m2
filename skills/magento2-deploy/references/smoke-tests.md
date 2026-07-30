@@ -31,6 +31,42 @@ Pass if output is "Magento Database is up to date" or equivalent zero-exit.
 Pass if no cache type is in an unexpected state (all "Enabled" or all "Disabled" per
 project convention).
 
+### Error signals since the deploy started
+
+An HTTP 200 does not mean nothing broke. Magento records failures in three places, and two of
+them never reach `exception.log`:
+
+| Source | Written by | Reaches `exception.log`? |
+|--------|-----------|--------------------------|
+| `var/report/{sha256}` (nested under `xx/yy/` when `MAGE_ERROR_REPORT_DIR_NESTING_LEVEL` is set) | `pub/errors/processor.php::saveReport()` via `App\ExceptionHandler` | yes on 2.4.8 (`ExceptionHandler.php:252`), not on every version |
+| `var/report/api/{id}` | `Webapi\ErrorProcessor::apiShutdownFunction()` on a PHP fatal | **no — that path makes no logger call at all** |
+| `var/log/system.log`, `var/log/{vendor}_{module}.log` | any `$logger->error()/critical()` **without** an exception in the context | **no** — `Logger\Handler\System::write()` routes to `exception.log` only when `$record['context']['exception']` is set |
+
+So `smoke.sh` scans both, windowed on the deploy start:
+
+```bash
+SINCE_TS="{deploy started_at}" MAGENTO_ROOT="{magento_root}" MODULES="{modules}" \
+    ${CLAUDE_SKILL_DIR}/scripts/smoke.sh
+```
+
+| Check | Fail | Warn | Pass |
+|-------|------|------|------|
+| `error-reports` | any `var/report/**` file with mtime inside the window | — | none |
+| `error-logs` | an ERROR+ entry inside the window naming a **deployed** module (`Vendor_Module` / `Vendor\Module`) | ERROR+ entries naming none of them (pre-existing site noise) | no ERROR+ entries |
+
+Notes:
+
+- `SINCE_TS` takes ISO 8601 or epoch seconds. **Pass the real deploy start** — without it the
+  scan falls back to a 15-minute window and says so in the detail string.
+- `debug.log` is skipped: it mirrors the other handlers, so it would double-count.
+- Only the last 2 MiB of each log is read; a deploy window never reaches further back, and it
+  keeps a multi-GB `cron.log` cheap.
+- Without python3 the check records `skipped` with an explicit "var/report and var/log NOT
+  checked" detail — it never reports pass on an unchecked source.
+- A `fail` here does not roll back (the deploy completed) — it is a "needs investigation"
+  finding, and `var/report` files decode to message + trace + URL for triage via
+  `magento2-debug`.
+
 ## Surface-Driven Smokes
 
 Run only for surfaces present in the deployed modules.

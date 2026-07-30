@@ -7,7 +7,7 @@ Duration: {N} seconds
 Status: {Success | Failure | Partial (rolled back)}
 Skill versions:
 
-- magento2-deploy@1.3.0
+- magento2-deploy@1.4.0
   - magento2-context@1.11.0
 
 ## Modules Deployed
@@ -66,6 +66,8 @@ None.
 
 ## Next Steps
 
-- Monitor `var/log/exception.log` for the next 24 hours.
+- Monitor `var/log/exception.log`, `var/log/system.log` (string-level criticals never reach
+  `exception.log`) and `var/report/` (API fatals write there with no log entry at all) for the
+  next 24 hours.
 - Run smoke validation on the public site URL.
 - If issues arise, rollback via: `git revert {deploy commit}` + `/magento2-deploy --env={env} {modules}`

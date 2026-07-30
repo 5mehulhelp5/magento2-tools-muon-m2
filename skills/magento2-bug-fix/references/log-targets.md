@@ -18,5 +18,15 @@ During Phase 1, grep the targets above and save, for each log file searched, to
 - Match count
 - 3–5 sample matches with timestamps
 
+`var/report/**` is a Phase 1 target in its own right, not an afterthought: it is recursive
+(`var/report/xx/yy/{sha256}` when report-dir nesting is enabled) and `var/report/api/{id}` is
+written on a REST/GraphQL PHP fatal with **no log entry anywhere**. Record, per report file:
+the decoded message, the `url`, and the `report_id` (which appears alongside the `exception.log`
+entry on 2.4.7+, letting you join the two — API reports have no such counterpart).
+
+When the reporter says "there is nothing in the logs", record *which* sinks were actually
+checked. An untouched `exception.log` is not evidence of no error — see the routing rule in
+`log-locations.md`.
+
 Do not paste raw log dumps into the conversation — group by error signature and surface the
 top distinct entries.

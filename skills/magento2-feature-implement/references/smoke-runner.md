@@ -100,32 +100,45 @@ Exit codes: `0` = pass, `1` = at least one finding, `78` = tool unavailable.
 
 ---
 
-## 4. Exception Log Diff (S8)
+## 4. Error-Signal Diff (S8)
 
-Implemented by `${CLAUDE_SKILL_DIR}/scripts/smoke-baseline.sh` (S1) and `${CLAUDE_SKILL_DIR}/scripts/smoke-tail-since.sh` (S8). Operates
-on byte offset, not line count, so concurrent writes are detected even if the file rotated.
+Implemented by `${CLAUDE_SKILL_DIR}/scripts/smoke-baseline.sh` (S1) and
+`${CLAUDE_SKILL_DIR}/scripts/smoke-tail-since.sh` (S8). Three signal sources — `exception.log`,
+every other `var/log/*.log`, and `var/report/**` — because Magento writes failures to all three
+and two of them never touch `exception.log`. Full mechanics, level policy, attribution rules and
+exit codes: `error-signal-baseline.md`. Do not re-derive them here.
 
-S1 produces `smoke/baseline.txt`:
+```bash
+# S1 — capture. Second arg is {ctx.magento_root}; omit to auto-resolve.
+scripts/smoke-baseline.sh .docs/{FeatureName}/smoke/baseline.txt {ctx.magento_root}
 
+# S8 — diff. --namespace takes every module the feature owns (comma-separated); it is what
+# separates "the feature broke this" (Critical, gating) from background noise (Medium, recorded).
+scripts/smoke-tail-since.sh \
+    .docs/{FeatureName}/smoke/baseline.txt \
+    .docs/{FeatureName}/smoke/raw/S8/exception-diff.log \
+    --json=.docs/{FeatureName}/smoke/raw/S8/signals.json \
+    --namespace={Vendor}_{Module}[,{Vendor}_{Other}] \
+    --surfaces=cron,queue \
+    --allowlist=.docs/{FeatureName}/smoke/allowlist.txt
 ```
-file=src/var/log/exception.log
-size_bytes=12834
-sha256_of_last_4096=ef9c...
-captured_at=2026-05-28T10:14:22Z
-```
 
-S8 reads `smoke/baseline.txt`, locates the file (handles rotation: if size decreased or sha mismatch
-of the original tail region, the file rotated — re-read from byte 0 and treat the entire content as
-"new since baseline"), and writes the diff to `smoke/raw/S8/exception-diff.log`.
+Artefacts: `exception-diff.log` (unchanged legacy path), `logs/{name}.diff` per other log that
+grew, `reports/{name}.json` per new/refreshed report file, and `signals.json` — the file S9
+reads. Every finding in `signals.json` carries `severity`, `gating`, `category`, `attributed`,
+`occurrences` and a stable `signature`; S9 copies them into `findings.md` keyed by that signature.
 
-Any non-empty diff is a finding. Categorisation: each new line becomes one finding with severity
-**Critical** by default; the runner pattern-matches against known noise (e.g. cron heartbeat that
-the user explicitly allowlisted in `CLAUDE.md` via `Smoke exception ignore: ^Cron .* heartbeat$`)
-and demotes matched lines to Medium.
+Exit codes drive the iteration verdict: `1` = gating signal, 6B fails · `4` = non-gating signals
+only, iteration may pass · `0` = clean · `5` = **degraded scan** (python3 missing or a
+pre-manifest baseline): only `exception.log` was checked, so record a Medium coverage finding and
+say so in the run report — a `5` is not a pass.
+
+Before S8, write the `Smoke exception ignore:` patterns from `CLAUDE.md` to
+`smoke/allowlist.txt` (one PCRE per line) so the run is reproducible from its own artefacts.
 
 The baseline file persists across iterations within the same run, so iteration 2's S8 still
-diffs against iteration 1's S1 baseline — i.e. exception lines created by iteration 1's fix
-attempts are not "forgiven". This is intentional.
+diffs against iteration 1's S1 baseline — i.e. signals created by iteration 1's fix attempts are
+not "forgiven". This is intentional; `findings.md` carries the resolved/unresolved memory.
 
 ---
 
@@ -141,12 +154,12 @@ flowchart TD
     E --> F[S5 Admin grids]
     F --> G[S6 New/changed routes]
     G --> I[S7 Customer flows]
-    I --> J[S8 Exception.log diff]
+    I --> J[S8 Error-signal diff]
     J --> K[S9 Triage and report]
 ```
 
 Suites S2–S7 run sequentially (not parallel) — they share auth state and would race on the
-exception log baseline. Within a suite, individual scenarios may parallelise as long as the
+error-signal baseline. Within a suite, individual scenarios may parallelise as long as the
 runner script supports it; the default browser wrapper runs serially for predictability.
 
 ---

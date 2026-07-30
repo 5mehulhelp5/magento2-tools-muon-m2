@@ -19,6 +19,9 @@ Triggered by: magento2-feature-implement Phase 6B
 | Browser | playwright {ver} / puppeteer {ver} / google-chrome {ver} / unavailable |
 | jq | {ver} / unavailable |
 | `exception.log` size at baseline | {bytes} bytes |
+| Logs baselined | {N} files under `var/log/` |
+| Report files at baseline | {N} under `var/report/` |
+| Signal scan | full / **degraded** ({reason} — only `exception.log` was checked) |
 | Production guard | {passed / overridden via CLAUDE.md} |
 
 Skipped suites: {S2, S7, … with one-sentence reason each, or "none"}.
@@ -94,18 +97,29 @@ Throwaway customer: `smoke+a1b2c3@example.test` — cleaned up in S9.
 
 ---
 
-## S8 — Exception Log Diff
+## S8 — Error-Signal Diff
 
-- Baseline offset: {bytes} (captured S1)
-- Live size at S8: {bytes}
-- Diff size: {bytes}
-- Rotated: {no / yes — note}
+Sources scanned (from `smoke/raw/S8/signals.json`):
 
-| Group | First line | Source path (best guess) | Matched allowlist? | Severity |
-|-------|------------|--------------------------|--------------------|----------|
-| 1 | `[2026-05-28 10:18:42] main.CRITICAL: Class ... not found` | `Vendor\Xyz\Controller\…` | no | Critical |
+| Source | New bytes / files | Levels seen | Rotated / created | Gating |
+|--------|-------------------|-------------|--------------------|--------|
+| `var/log/exception.log` | {bytes} | {CRITICAL: N} | no | {N} |
+| `var/log/system.log` | {bytes} | {ERROR: N, INFO: N} | no | {N} |
+| `var/log/{module}.log` | {bytes} | {ERROR: N} | created during run | {N} |
+| `var/report/**` | {N new, N refreshed} | n/a | n/a | {N} |
 
-Diff file: `smoke/raw/S8/exception-diff.log`.
+Signals (aggregated by signature — `x{N}` is the occurrence count):
+
+| # | Severity | Gating | Category | Source | Attributed | x | First line / report message | Allowlisted |
+|---|----------|--------|----------|--------|-----------|---|------------------------------|-------------|
+| S8-1 | Critical | yes | log_error | `var/log/system.log` | yes | 4 | `main.CRITICAL: Type Error occurred when creating object: Vendor\Xyz\Plugin\Foo` | no |
+| S8-2 | High | yes | report_file | `var/report/ab/cd/…` | no | 1 | `Required parameter 'theme_dir' was not passed` | no |
+| S8-3 | Medium | no | log_error | `var/log/cron.log` | no | 6 | `main.ERROR: Cron Job consumers_runner has an error` | no |
+
+Exit code: {0 none / 1 gating / 4 recorded-only / 5 degraded}.
+Artefacts: `smoke/raw/S8/signals.json`, `exception-diff.log`, `logs/{name}.diff`,
+`reports/{name}.json`.
+Coverage caveats (`degraded[]`): {list, or "none"}.
 
 ---
 
