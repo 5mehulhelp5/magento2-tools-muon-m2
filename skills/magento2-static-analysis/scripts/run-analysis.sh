@@ -10,6 +10,9 @@
 #   PHPSTAN       Path to phpstan binary (default: "")
 #   PHPMD         Path to phpmd binary (default: "")
 #   RECTOR        Path to rector binary (default: "")
+#   PHPSTAN_MEMORY_LIMIT
+#                 Value for phpstan's --memory-limit (default: 2G). php.ini's default (commonly
+#                 128M) crashes phpstan on a Magento codebase and yields an apparently-clean run.
 #   FINDINGS_FILE Output path for the JSON findings array (default: auto tmp file printed to stdout)
 #
 # Output:
@@ -265,12 +268,20 @@ except Exception as exc:
     print("[]")
     sys.exit(0)
 
-# PHPMD "priority" ranks how important a RULE is, not how severe a defect is: its naming rules
-# ship at priority 1, so a 1:1 map made "method is not named in camelCase" a Critical. In a
-# consolidated audit that is load-bearing — magento2-audit fails the verdict on any Critical or
-# High — so a style nit would fail every module it touched. A lint rule never warrants Critical;
-# the scale is compressed so PHPMD can raise concern without blocking a release on its own.
-priority_map = {1: 'high', 2: 'medium', 3: 'medium', 4: 'low', 5: 'info'}
+# PHPMD "priority" ranks how important a RULE is, not how severe a defect is: its CamelCase* rules
+# ship at priority 1, so a 1:1 map made "method is not named in camelCase" a Critical.
+#
+# In a consolidated audit that is load-bearing. magento2-audit's verdict blocks on BOTH tiers —
+# `if sev in ('critical', 'high'): blockers += 1`, then `FAIL if blockers` (audit/scripts/
+# consolidate.sh) — so demoting critical→high would have kept the exact failure it was meant to
+# stop: `_resetState()`, whose name is MANDATED by Magento's ResetAfterRequestInterface, would
+# still FAIL the audit of every module that does not ship its own phpmd.xml.
+#
+# So the map is CAPPED at medium: no phpmd finding can be a blocker on its own. That is the whole
+# invariant — a lint rule should raise concern, not veto a release — and the test asserts it
+# against the blocking tiers rather than against 'critical' alone. Anything phpmd finds that truly
+# warrants High is a defect another dimension (security, architecture) is meant to catch on merit.
+priority_map = {1: 'medium', 2: 'medium', 3: 'medium', 4: 'low', 5: 'info'}
 out = []
 seq = 1
 
@@ -412,9 +423,9 @@ completeness was NOT checked; invoke per module to cover it" >&2
         bash "${SCRIPT_DIR}/surface-invariants.sh" >/dev/null || true
     # stderr is deliberately NOT captured to a temp file: build-findings.sh turns this script's
     # stderr into the document's `scanner_errors`, which is the only channel that distinguishes
-    # "checked and clean" from "not checked". (The older *_ERR temp files above are written but
-    # never forwarded — a pre-existing gap, left alone here rather than changing four scanners'
-    # reporting behaviour in a change about surface completeness.)
+    # "checked and clean" from "not checked". The other scanners write to *_ERR temp files instead,
+    # which forward_tool_errors() streams to this same stderr once every pass has run; writing here
+    # directly is equivalent, just without a temp file to relay.
     if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SURFACE_OUT" 2>/dev/null; then
         echo "run-analysis/surface-invariants: produced invalid JSON — surface completeness \
 findings were dropped" >&2
@@ -435,7 +446,7 @@ run_surface_invariants
 # is what let three separate parser failures each report findings: [] with scanner_errors: [] —
 # a false clean, the worst failure mode a quality gate has.
 forward_tool_errors() {
-    local name err
+    local name err line
     for name in phpcs phpstan phpmd rector; do
         case "$name" in
             phpcs) err="$PHPCS_ERR" ;;
@@ -443,9 +454,19 @@ forward_tool_errors() {
             phpmd) err="$PHPMD_ERR" ;;
             rector) err="$RECTOR_ERR" ;;
         esac
-        if [ -s "$err" ]; then
-            echo "run-analysis/${name}: $(tr '\n' ' ' < "$err" | sed 's/  */ /g')" >&2
-        fi
+        [ -s "$err" ] || continue
+
+        # Streamed line by line rather than flattened through a command substitution: a tool's
+        # stderr can be long (phpstan prints multi-line traces), and collapsing it would cost the
+        # structure that makes it readable in `scanner_errors`. Lines the parsers already tagged
+        # keep their own prefix instead of being tagged twice.
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                '') ;;
+                run-analysis/*) printf '%s\n' "$line" >&2 ;;
+                *) printf 'run-analysis/%s: %s\n' "$name" "$line" >&2 ;;
+            esac
+        done < "$err"
     done
 }
 forward_tool_errors
