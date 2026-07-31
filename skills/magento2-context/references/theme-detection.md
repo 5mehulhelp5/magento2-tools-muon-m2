@@ -31,9 +31,12 @@ the source describes how it was derived (e.g. `"src/app/etc/config.php:themes[].
     - The source string explicitly notes this is package-presence evidence, not
       active-theme confirmation.
 
-3. **Component registration scan (filesystem).** If steps 1–2 produced no result, discover every
-   registered frontend theme and pick the **leaf** of the parent chain. Two registration shapes
-   are indexed, because a theme is a component like any other:
+3. **Component registration scan (filesystem).** The scan itself **always runs** (wherever PHP is
+   available) — the theme map it builds is what the Breeze parent-chain walk below consumes, so
+   it is not gated on steps 1–2. Only its *pick* is conditional: the discovered theme is adopted
+   as `theme.frontend` only when steps 1–2 produced no result. The pick is the **leaf** of the
+   parent chain. Two registration shapes are indexed, because a theme is a component like any
+   other:
     - `app/design/frontend/<Vendor>/<theme>/theme.xml` — path from the directory.
     - `vendor/<vendor>/<pkg>/registration.php` declaring `ComponentRegistrar::THEME` with a
       `frontend/<Vendor>/<theme>` path — parent read from the sibling `theme.xml`. Both the
@@ -97,9 +100,12 @@ RequireJS/Knockout/jQuery with a Cash-based stack. It is detected independently 
    `theme.frontend_source` marks the pick unverified either way.
 
 3. **Honest gaps.** With no evidence, `installed`/`active` stay `false`, `parent` is `null`.
-   The walk only follows `app/design` theme.xml files, so a custom child theme whose Breeze
-   parent lives in `vendor/` is reported via `installed` (package presence) even when the
-   chain walk cannot complete; `source` records which signal fired.
+   The walk spans both registration shapes indexed in step 3 — `app/design/frontend/<Vendor>/<theme>/`
+   and `vendor/<vendor>/<pkg>/` package roots — so a custom child theme whose Breeze parent lives
+   in `vendor/` now resolves. What stays out of reach is a theme registered outside those two
+   shapes (a registration path deeper than a package root, or a symlinked path repository) and any
+   chain longer than 10 hops: there the Breeze signal is reported via `installed` (package
+   presence) alone, with the chain walk incomplete. `source` records which signal fired.
 
 ### Why it matters
 
