@@ -14,11 +14,15 @@ the source describes how it was derived (e.g. `"src/app/etc/config.php:themes[].
 
 ## `theme.frontend`
 
-1. **`app/etc/config.php` (authoritative).** If the file exists, iterate the `themes`
-   array and pick the first entry whose `area = "frontend"`. Use its `theme_path`.
+1. **`app/etc/config.php` `themes` array.** If present, prefer a registered `area = "frontend"`
+   entry that is not under `Magento/`; fall back to any non-`Magento/blank` entry, then the first.
     - `theme.frontend = "<theme_path>"`.
-    - `theme.frontend_source = "<config.php path>:themes[].area=frontend"`.
+    - `theme.frontend_source = "<config.php path>:themes[] registered (active theme unverified …)"`.
     - The resolver checks `src/app/etc/config.php` first, then `app/etc/config.php`.
+    - **Not authoritative, and frequently absent.** The `themes` key is written by some install
+      paths and not others; a composer-installed store routinely has no `themes` key at all. The
+      genuinely authoritative source is the database (`core_config_data design/theme/theme_id`),
+      which this resolver does not read — hence "unverified" in every source string below.
 
 2. **Hyva package presence (heuristic).** If step 1 produced no result and
    `composer.json` requires any `hyva-themes/*` package, classify as `hyva`.
@@ -27,7 +31,26 @@ the source describes how it was derived (e.g. `"src/app/etc/config.php:themes[].
     - The source string explicitly notes this is package-presence evidence, not
       active-theme confirmation.
 
-3. **No evidence.** Leave `theme.frontend = null`. Do **not** fall through to
+3. **Component registration scan (filesystem).** The scan itself **always runs** (wherever PHP is
+   available) — the theme map it builds is what the Breeze parent-chain walk below consumes, so
+   it is not gated on steps 1–2. Only its *pick* is conditional: the discovered theme is adopted
+   as `theme.frontend` only when steps 1–2 produced no result. The pick is the **leaf** of the
+   parent chain. Two registration shapes are indexed, because a theme is a component like any
+   other:
+    - `app/design/frontend/<Vendor>/<theme>/theme.xml` — path from the directory.
+    - `vendor/<vendor>/<pkg>/registration.php` declaring `ComponentRegistrar::THEME` with a
+      `frontend/<Vendor>/<theme>` path — parent read from the sibling `theme.xml`. Both the
+      single-line and the multi-line (trailing-comma) call forms are matched. The glob is pinned
+      to package roots, so a `theme.xml` inside a package's test fixtures is never indexed as a
+      real theme.
+
+   A theme that something else inherits from is a base, not the storefront theme, so the
+   candidates are the non-`Magento/` themes that are nobody's parent. With exactly one candidate
+   the pick is recorded as the sole leaf; with several, the first in sorted order is taken and
+   the source string records the candidate count, so the ambiguity is visible rather than implied.
+    - `theme.frontend_source = "component registration scan (<n> frontend themes; … — active theme unverified, confirm via 'config:show design/theme/theme_id')"`.
+
+4. **No evidence.** Leave `theme.frontend = null`. Do **not** fall through to
    `"custom"`. Downstream skills that need the active theme must surface an honest
    "unknown" rather than acting on a fabricated default.
 
@@ -52,16 +75,37 @@ RequireJS/Knockout/jQuery with a Cash-based stack. It is detected independently 
    package (`breeze-blank`, `breeze-evolution`, `breeze-enterprise`) **or**
    `swissup/module-breeze`. `packages` collects every matched package name.
 
-2. **`active`** — `true` only when the resolved `theme.frontend`, or any `<parent>` in its
-   `app/design/frontend/<code>/theme.xml` chain (walked up to 10 hops), is a Swissup Breeze
-   theme (its code contains `breeze`). `parent` is set to that Breeze theme code (e.g.
-   `Swissup/breeze-evolution`). Vendor-installed Breeze themes that are *directly* active are
-   matched by the same "code contains breeze" rule.
+2. **`active`** — `true` only when the resolved `theme.frontend`, or any `<parent>` in its chain
+   (walked up to 10 hops), is a Swissup Breeze theme (its code contains `breeze`). `parent` is
+   set to that Breeze theme code (e.g. `Swissup/breeze-evolution`). Vendor-installed Breeze
+   themes that are *directly* active are matched by the same "code contains breeze" rule.
+
+   The chain is walked over the **full** theme map from step 3 of `theme.frontend` — both
+   `app/design` and vendor packages. It previously read only
+   `app/design/frontend/<code>/theme.xml`, which meant a Breeze storefront (whose themes are
+   always composer packages) found no `theme.xml` at the first hop and stopped, reporting
+   `active = false` on a store visibly serving Breeze. Combined with `theme.frontend` being
+   `null` whenever `config.php` had no `themes` key — which also skipped the walk entirely — the
+   field read `false` on exactly the installs it exists to identify.
+
+   Because `active` gates every `magento2-breeze-*` skill and steers dimension selection in
+   `magento2-audit`, a false negative silently drops Breeze coverage. That is worse than
+   refusing outright: nothing signals the gap. Regression-guarded by
+   `tests/test-context-breeze-vendor-theme.sh`.
+
+   **Inference limit.** When the only non-`Magento/` theme registered is itself a Breeze theme,
+   the resolver reports `active = true` — a store does not install and register a Breeze theme
+   in order to run Luma. When the active theme's chain reaches a non-Breeze base instead,
+   `active` stays `false` even with the packages installed. Neither case reads the database, so
+   `theme.frontend_source` marks the pick unverified either way.
 
 3. **Honest gaps.** With no evidence, `installed`/`active` stay `false`, `parent` is `null`.
-   The walk only follows `app/design` theme.xml files, so a custom child theme whose Breeze
-   parent lives in `vendor/` is reported via `installed` (package presence) even when the
-   chain walk cannot complete; `source` records which signal fired.
+   The walk spans both registration shapes indexed in step 3 — `app/design/frontend/<Vendor>/<theme>/`
+   and `vendor/<vendor>/<pkg>/` package roots — so a custom child theme whose Breeze parent lives
+   in `vendor/` now resolves. What stays out of reach is a theme registered outside those two
+   shapes (a registration path deeper than a package root, or a symlinked path repository) and any
+   chain longer than 10 hops: there the Breeze signal is reported via `installed` (package
+   presence) alone, with the chain walk incomplete. `source` records which signal fired.
 
 ### Why it matters
 

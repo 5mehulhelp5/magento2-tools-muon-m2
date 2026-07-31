@@ -6,6 +6,53 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.30.0] — 2026-07-31 — `magento2-context` called a Breeze storefront "not Breeze"
+
+Found by auditing a real 2.4.9 store: the resolver reported `theme.breeze.active = false` and
+`theme.frontend = null` on a storefront whose own responses carried `x-built-with: Breeze Front`.
+Same failure class as 1.27.0 and 1.29.0 — a check returning a clean answer over ground it never
+covered.
+
+Two independent defects, either sufficient on its own:
+
+1. **The frontend theme was resolved only from `app/etc/config.php`'s `themes` array.** That key
+   is written by some install paths and absent on others; on a composer-installed store it is
+   routinely missing entirely, and the resolver then emitted `theme.frontend = null`. The Breeze
+   parent-chain walk is gated on a resolved theme, so it never ran.
+2. **The walk read `app/design/frontend/<code>/theme.xml` and nothing else.** Breeze themes ship
+   as composer packages under `vendor/`, declaring their path through `registration.php`, so the
+   walk found no `theme.xml` at the first hop and stopped — reporting `active = false` even where
+   a theme *had* been resolved.
+
+### Changed
+
+- **`magento2-context` 1.11.0 → 1.12.0.** A filesystem discovery step now indexes frontend themes
+  from both `app/design/frontend/<Vendor>/<theme>/theme.xml` and vendor `registration.php` files
+  declaring `ComponentRegistrar::THEME` — both the single-line and the multi-line trailing-comma
+  call forms, with the glob pinned to package roots so a `theme.xml` inside a package's test
+  fixtures is never mistaken for an installed theme. It builds a `path => parent` map and picks
+  the **leaf** of the parent chain: a theme something else inherits from is a base, not the
+  storefront theme. The Breeze walk runs over that map, so a vendor-packaged ancestor resolves.
+
+  `theme.frontend_source` records how many frontend themes were discovered and how many leaf
+  candidates existed, so an ambiguous pick is visible rather than implied. Nothing here reads the
+  database — `core_config_data design/theme/theme_id` remains the only authoritative source — so
+  every pick stays explicitly marked unverified.
+
+### Why it mattered
+
+`theme.breeze.active` gates every `magento2-breeze-*` skill and steers dimension selection in
+`magento2-audit`. A false negative silently drops Breeze coverage from a storefront that needs
+it, which is worse than refusing outright: a refusal prints an install command, this printed
+nothing at all.
+
+### Tests
+
+`tests/test-context-breeze-vendor-theme.sh` pins both halves — the vendor-packaged chain
+`Muon/cosmic → Swissup/breeze-evolution → Swissup/breeze-blank` with no `themes` key present, and
+the honest gap where Breeze is installed but the active theme's chain reaches Luma, which must
+stay `active = false`. Suite: 84 pass, 0 fail.
+
 ## [1.29.0] — 2026-07-30 — `magento2-static-analysis` ran phpstan blind and rector into a wall
 
 Three defects found by auditing a real module, all of which made a scan look like it had run when

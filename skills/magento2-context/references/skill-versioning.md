@@ -9,7 +9,7 @@ skills evolve.
 
 | Skill                      | Version | Bumped when                                                         |
 |----------------------------|---------|---------------------------------------------------------------------|
-| magento2-context           | 1.11.0  | JSON schema changes, new resolution rules, new tool probes          |
+| magento2-context           | 1.12.0  | JSON schema changes, new resolution rules, new tool probes          |
 | magento2-module-create     | 1.10.2  | New template added, surface added, naming rule changed              |
 | magento2-module-review     | 2.4.0   | New checklist category, severity calibration change, new JSON field, fix-routing change |
 | magento2-feature-implement | 2.14.0  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
@@ -43,7 +43,28 @@ skills evolve.
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-07-30)
+## Changelog (last update: 2026-07-31)
+
+- **`magento2-context` 1.11.0 → 1.12.0 — theme and Breeze detection resolve composer-installed
+  themes.** Two independent defects made `theme.breeze.active` read `false` on a storefront
+  demonstrably serving Breeze (its responses carried `x-built-with: Breeze Front`), with
+  `theme.frontend` `null` alongside it. First, the frontend theme was resolved only from
+  `app/etc/config.php`'s `themes` array — a key that is absent on a routine composer-installed
+  store — and the Breeze walk is gated on a resolved theme, so it never ran at all. Second, the
+  walk read `app/design/frontend/<code>/theme.xml` and nothing else, while Breeze themes are
+  always composer packages under `vendor/`, so it found no `theme.xml` at the first hop and
+  stopped.
+  A new filesystem step discovers frontend themes from both `app/design` and vendor
+  `registration.php` `ComponentRegistrar::THEME` declarations (single-line and multi-line call
+  forms; the glob is pinned to package roots so a package's test fixtures are never indexed),
+  builds a `path => parent` map, and picks the **leaf** of the parent chain — a theme something
+  else inherits from is a base, not the storefront theme. The Breeze walk now runs over that map.
+  `theme.frontend_source` records the candidate count so an ambiguous pick is visible rather than
+  implied; nothing here reads the database, so the pick stays explicitly unverified.
+  Because `active` gates every `magento2-breeze-*` skill and steers dimension selection in
+  `magento2-audit`, the old false negative silently dropped Breeze coverage — worse than refusing
+  outright, since nothing signalled the gap. Additive: no field added or removed, `schemaVersion`
+  stays `1.0`. Regression-guarded by `tests/test-context-breeze-vendor-theme.sh`.
 
 - **`magento2-security-audit` 1.6.0 → 1.7.0 — Adobe's `patch-status` as a CVE source.**
   Adobe decoupled "is this fixed" from "what version am I": isolated patches and hotfixes carry
