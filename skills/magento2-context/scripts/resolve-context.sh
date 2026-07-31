@@ -594,12 +594,106 @@ if [[ "$THEME_FRONTEND" == "null" && -f "$COMPOSER_JSON" ]] && command -v php >/
     fi
 fi
 
+# Filesystem theme discovery — the fallback when config.php carries no `themes` array, and
+# the source of the parent map the Breeze walk below needs.
+#
+# `themes` in app/etc/config.php is written by some install paths and absent on others; on a
+# composer-installed store it is routinely missing entirely, which used to leave
+# theme.frontend null and — because the Breeze walk is gated on it — silently reported
+# breeze.active = false on a storefront visibly running Breeze (CTX-Breeze).
+#
+# Two registration shapes have to be indexed, because a theme is a component like any other:
+#   - app/design/frontend/<Vendor>/<theme>/theme.xml  (path from the directory)
+#   - vendor/<vendor>/<pkg>/registration.php          (path from the THEME registration string)
+# The vendor glob is pinned to package roots so a theme.xml buried in some package's test
+# fixtures cannot be mistaken for an installed theme.
+THEME_MAP_JSON="{}"
+if command -v php >/dev/null 2>&1; then
+    theme_probe=$(php -r '
+        $root = rtrim($argv[1], "/");
+        $known = $argv[2];
+
+        $parentOf = static function (string $xml): string {
+            if (!is_file($xml)) { return ""; }
+            $c = (string) file_get_contents($xml);
+            return preg_match("#<parent>\s*([^<]+?)\s*</parent>#", $c, $m) ? trim($m[1]) : "";
+        };
+
+        $themes = [];
+
+        foreach (glob($root . "/app/design/frontend/*/*/theme.xml") ?: [] as $xml) {
+            $path = basename(dirname(dirname($xml))) . "/" . basename(dirname($xml));
+            $themes[$path] = $parentOf($xml);
+        }
+
+        foreach (glob($root . "/vendor/*/*/registration.php") ?: [] as $reg) {
+            $c = (string) file_get_contents($reg);
+            if (stripos($c, "ComponentRegistrar::THEME") === false) { continue; }
+            // Matches both the single-line and the multi-line (trailing-comma) call forms.
+            if (!preg_match("#[\x27\"]frontend/([^\x27\"]+)[\x27\"]#", $c, $m)) { continue; }
+            $path = trim($m[1]);
+            if ($path === "" || isset($themes[$path])) { continue; }
+            $themes[$path] = $parentOf(dirname($reg) . "/theme.xml");
+        }
+
+        // A theme something else inherits from is a base, not the storefront theme. The active
+        // theme is a LEAF of the parent chain — still unverified without the DB, but a far
+        // better guess than the first registered entry, which is almost always Magento/blank.
+        $isParent = array_flip(array_filter(array_values($themes)));
+        $leaves = [];
+        foreach ($themes as $path => $_parent) {
+            if (stripos($path, "Magento/") === 0) { continue; }
+            if (isset($isParent[$path])) { continue; }
+            $leaves[] = $path;
+        }
+        sort($leaves);
+
+        $pick = $known !== "" ? $known : ($leaves[0] ?? "");
+
+        // Walk the chain over the WHOLE map, so a vendor-packaged ancestor resolves too.
+        $ancestor = "";
+        $cur = $pick;
+        $seen = [];
+        for ($i = 0; $i < 10; $i++) {
+            if ($cur === "" || isset($seen[$cur])) { break; }
+            $seen[$cur] = true;
+            if (stripos($cur, "breeze") !== false) { $ancestor = $cur; break; }
+            $cur = $themes[$cur] ?? "";
+        }
+
+        echo json_encode([
+            "pick" => $pick,
+            "ancestor" => $ancestor,
+            "leaves" => count($leaves),
+            "discovered" => count($themes),
+            "map" => $themes,
+        ]);
+    ' "$MAGENTO_ROOT" "$([[ "$THEME_FRONTEND" == "null" ]] && echo "" || echo "$THEME_FRONTEND")" 2>/dev/null || echo "")
+
+    if [[ -n "$theme_probe" ]]; then
+        THEME_MAP_JSON="$theme_probe"
+        fs_pick=$(printf '%s' "$theme_probe" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["pick"] ?? "";' 2>/dev/null)
+        fs_leaves=$(printf '%s' "$theme_probe" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo (int)($d["leaves"] ?? 0);' 2>/dev/null)
+        fs_found=$(printf '%s' "$theme_probe" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo (int)($d["discovered"] ?? 0);' 2>/dev/null)
+
+        if [[ "$THEME_FRONTEND" == "null" && -n "$fs_pick" ]]; then
+            THEME_FRONTEND="$fs_pick"
+            if [[ "${fs_leaves:-0}" -gt 1 ]]; then
+                THEME_FRONTEND_SRC="component registration scan (${fs_found} frontend themes; ${fs_leaves} leaf candidates, first taken — active theme unverified, confirm via 'config:show design/theme/theme_id')"
+            else
+                THEME_FRONTEND_SRC="component registration scan (${fs_found} frontend themes; sole non-Magento leaf of the parent chain — active theme unverified, confirm via 'config:show design/theme/theme_id')"
+            fi
+        fi
+    fi
+fi
+
 # --- Breeze (Swissup Breezefront) detection ---
 # installed = any swissup/breeze-* or swissup/module-breeze package is required in composer.
-# active    = the resolved frontend theme, or any theme.xml <parent> in its (app/design) chain,
-#             is a Swissup Breeze theme (code contains "breeze"). Honest-gaps rule: when there
-#             is no evidence, installed/active stay false, parent null. Consumed by the
-#             magento2-breeze-* skills, which refuse to run when installed is false.
+# active    = the resolved frontend theme, or any theme.xml <parent> anywhere in its chain
+#             (app/design AND vendor packages), is a Swissup Breeze theme (code contains
+#             "breeze"). Honest-gaps rule: when there is no evidence, installed/active stay
+#             false, parent null. Consumed by the magento2-breeze-* skills, which refuse to
+#             run when installed is false.
 BREEZE_INSTALLED="false"
 BREEZE_ACTIVE="false"
 BREEZE_PARENT="null"
@@ -623,21 +717,16 @@ if [[ -f "$COMPOSER_JSON" ]] && command -v php >/dev/null 2>&1; then
     fi
 fi
 
-# Walk the active frontend theme's parent chain (app/design only) for a Breeze ancestor.
+# Resolve the Breeze ancestor from the discovered parent map.
+#
+# The map spans app/design AND vendor packages, which the previous app/design-only lookup did
+# not: a Breeze storefront installs its themes through composer, so the walk found no
+# theme.xml at the first hop and stopped, reporting active = false.
 if [[ "$THEME_FRONTEND" != "null" && "$THEME_FRONTEND" != "hyva" ]] && command -v php >/dev/null 2>&1; then
-    breeze_parent=$(php -r '
-        $root = rtrim($argv[1], "/"); $cur = $argv[2]; $seen = [];
-        for ($i = 0; $i < 10; $i++) {
-            if ($cur === "" || isset($seen[$cur])) { break; }
-            $seen[$cur] = true;
-            if (stripos($cur, "breeze") !== false) { echo $cur; exit; }
-            $xml = $root . "/app/design/frontend/" . $cur . "/theme.xml";
-            if (!is_file($xml)) { break; }
-            $c = (string) file_get_contents($xml);
-            if (preg_match("#<parent>\s*([^<]+?)\s*</parent>#", $c, $m)) { $cur = trim($m[1]); }
-            else { break; }
-        }
-    ' "$MAGENTO_ROOT" "$THEME_FRONTEND" 2>/dev/null || echo "")
+    breeze_parent=$(printf '%s' "$THEME_MAP_JSON" | php -r '
+        $d = json_decode(stream_get_contents(STDIN), true);
+        echo is_array($d) ? (string) ($d["ancestor"] ?? "") : "";
+    ' 2>/dev/null || echo "")
     if [[ -n "$breeze_parent" ]]; then
         BREEZE_ACTIVE="true"
         BREEZE_PARENT="$breeze_parent"
@@ -721,7 +810,7 @@ cat > "$CACHE_TMP" <<EOF
 {
   "schemaVersion": "1.0",
   "skill": "magento2-context",
-  "skillVersion": "1.11.0",
+  "skillVersion": "1.12.0",
   "resolvedAt": "${TIMESTAMP}",
   "cacheKey": $(json_or_null "$CACHE_KEY"),
 

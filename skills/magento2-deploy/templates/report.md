@@ -8,7 +8,7 @@ Status: {Success | Failure | Partial (rolled back)}
 Skill versions:
 
 - magento2-deploy@1.4.0
-  - magento2-context@1.11.0
+  - magento2-context@1.12.0
 
 ## Modules Deployed
 
