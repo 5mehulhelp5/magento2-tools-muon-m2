@@ -17,7 +17,7 @@ skills evolve.
 | magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
 | magento2-module-upgrade    | 1.2.0   | New deprecation map, BC-break detection rules                       |
-| magento2-security-audit    | 1.7.0   | New CVE source, new pattern, severity calibration change, parser hardening |
+| magento2-security-audit    | 1.8.0   | New CVE source, new pattern, severity calibration change, parser hardening |
 | magento2-performance-audit | 1.2.0   | New pattern, new runtime check, severity calibration change         |
 | magento2-debug             | 1.3.1   | New mode added, output format change                                |
 | magento2-eav-attribute     | 1.3.2   | New entity type supported, new input type, template change          |
@@ -43,7 +43,31 @@ skills evolve.
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-07-31)
+## Changelog (last update: 2026-08-01)
+
+- **`magento2-security-audit` 1.7.0 → 1.8.0 — patched stores are no longer reported vulnerable.**
+  Three defects, found auditing a real 2.4.9 store whose report carried CVEs the operator had
+  already handled. (1) `version_in_range` parsed a range's upper bound with no `-pN` as patch
+  level *infinity*, so `"2.4.8 - 2.4.8"` — precisely how Adobe records "base release affected,
+  fixed in the first patch" — swallowed every later patch build. A 2.4.8-p1 store was reported
+  vulnerable to CVE-2025-47110 (critical), -43585, -27206, -49549 and -49550, each of whose own
+  `fixed_in` names 2.4.8-p1, at confidence `confirmed`. Measured before changing it: of 574
+  ranges 537 already carry an explicit `-pN` (the rule was inert) and 37 have equal bounds, with
+  **zero** in the ambiguous shape the rule existed for. Both bounds now treat a missing `-pN` as
+  patch 0; two lint rules keep it that way — `fixed_in` may not fall inside its own `affected`
+  range, and the ambiguous shape is rejected outright. (2) 13 of the 14 patch-fixed advisories
+  had no `detect` signature, so a fully-patched 2.4.9 store got 12 unclearable `needs-triage`
+  findings, one Critical. 12 gained a marker: Adobe ships the monthly group as one atomic patch
+  per branch and edition, so one verified marker settles every CVE in that bundle, and records
+  are split by Adobe's own `fixed_by_patch` id lists — the only per-CVE attribution Adobe
+  publishes. Markers were derived from the real diffs and verified byte-identical across
+  246p15/247p10/248p5/249; 244p18 and 245p17 are auth-gated and unverified, so those branches
+  fall back to `unknown` → `needs-triage`, never a false "patched". (3) A missing
+  `vendor/bin/patch-status` was silent, so `needs-triage` read as "we think you are vulnerable"
+  rather than "we could not tell"; it now names itself on stderr, split by whether a signature
+  was absent or merely inconclusive, and only when findings were actually left unresolved.
+  Regression-guarded by `tests/test-cve-range-upper-bound.sh` and
+  `tests/test-cve-apsb26-73-detect.sh`.
 
 - **`magento2-context` 1.11.0 → 1.12.0 — theme and Breeze detection resolve composer-installed
   themes.** Two independent defects made `theme.breeze.active` read `false` on a storefront

@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — `magento2-security-audit` reported patched stores as vulnerable
+## [1.31.0] — 2026-08-01 — `magento2-security-audit` reported patched stores as vulnerable
 
 Found by auditing a real 2.4.9 store: the report carried CVEs the operator believed were already
 handled. Three defects, each independently able to produce that impression.
@@ -56,7 +56,12 @@ handled. Three defects, each independently able to produce that impression.
   *and* `vendor/bin/patch-status` is missing, the scan says so on stderr — where
   `build-findings.sh` routes it into `scanner_errors` — with the install pointer and the
   `RUNNER=` hint for containerised stores. Deliberately conditional: a store that has the tool,
-  or one where nothing patch-fixed matched, stays quiet.
+  or one where nothing patch-fixed matched, stays quiet. The hint distinguishes the two reasons
+  an advisory is unresolved — no signature curated at all, versus a signature that exists but
+  could not settle the question (`vendor/` absent or unreadable, or code matching neither
+  baseline). Collapsing them would misreport the common case: with the new markers in place, a
+  store that simply has no `vendor/` committed *does* have signatures, they just cannot be read,
+  and claiming "no signature covers them" would send a reader after curation work already done.
 
 ### Compatibility
 
