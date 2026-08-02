@@ -6,6 +6,64 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — `magento2-security-audit` reported patched stores as vulnerable
+
+Found by auditing a real 2.4.9 store: the report carried CVEs the operator believed were already
+handled. Three defects, each independently able to produce that impression.
+
+1. **A range's upper bound was inflated to "any patch build".** `version_in_range` parsed an
+   upper bound with no `-pN` as patch level infinity, on the theory that `"2.4.7"` should cover
+   every `2.4.7-pN`. Measured against the shipped data that guard protected nothing and cost
+   real accuracy: of 574 ranges, 537 already carry an explicit `-pN` (inert) and 37 have equal
+   bounds — which is exactly how Adobe records "the base release is affected, fixed in the first
+   patch". **Zero** ranges had the ambiguous shape the rule existed for. So `"2.4.8 - 2.4.8"`
+   swallowed every later patch build, and a 2.4.8-p1 store was reported vulnerable to
+   CVE-2025-47110 (critical), -43585, -27206, -49549 and -49550 — each of whose own `fixed_in`
+   names 2.4.8-p1 — at confidence `confirmed`, i.e. asserted as fact. Left alone it would also
+   have pinned every APSB26-73 finding to 2.4.9 permanently, since `"2.4.9 - 2.4.9"` would
+   swallow 2.4.9-p1 the day Adobe ships it.
+2. **13 of the 14 patch-fixed advisories had no `detect` signature.** Their fix ships as an
+   isolated patch with no version bump, so version matching cannot see patch state; without a
+   signature the scanner could neither confirm nor clear them, and a fully-patched 2.4.9 store
+   got 12 permanently-unclearable `needs-triage` findings, one of them CRITICAL.
+3. **A missing `vendor/bin/patch-status` was silent.** Adobe's Commerce Version Tool is the
+   authoritative per-CVE verdict and the only thing that could settle those 12 findings, but its
+   absence produced no message at all — so `needs-triage` read as "we think you are vulnerable"
+   rather than "we could not tell".
+
+### Fixed
+
+- **Range upper bounds mean the base release.** Both bounds now treat a missing `-pN` as patch 0.
+  A store on a declared-fixed version is no longer reported vulnerable to the advisory that names
+  it. Two new lint rules hold the line: `fixed_in` may not fall inside its own `affected` range
+  (real version tokens only — pre-release tags and isolated-patch labels like `2.4.9-2026-jul`
+  are filenames, not versions), and the ambiguous shape (differing bounds, no `-pN` on the upper)
+  is rejected so the false negative the old default covered cannot be reintroduced silently.
+- **APSB26-73 patch detection.** 12 of the 13 uncovered advisories gained a `detect` marker, so
+  stores without the Commerce Version Tool can now be cleared from `vendor/` alone. Adobe ships
+  the monthly group as one atomic patch per branch and edition, so one verified marker settles
+  every CVE in that bundle; records are split by Adobe's own `fixed_by_patch` id lists, the only
+  per-CVE attribution Adobe publishes. CE marker: the `/s` flag added to `framework/View/Element/
+  UiComponent/DataProvider/Sanitizer.php` (in `magento/framework`, readable on both editions).
+  EE marker: `$forbiddenFileExtensionsDisplay` in `module-customer-custom-attributes`, for
+  CVE-2026-47994, the one advisory with no `-CE` id. Both pairs were derived from the real diffs
+  at repo.magento.com and verified byte-identical across the 246p15 / 247p10 / 248p5 / 249
+  branches; the 244p18 and 245p17 diffs are auth-gated and could not be verified, so if their fix
+  text differs those stores fall back to `unknown` → `needs-triage` — the same verdict they get
+  today, never a false "patched". CVE-2026-47995 (B2B) remains uncurated: its patch targets the
+  `magento/extension-b2b` metapackage and no marker was verifiable.
+- **The absent Commerce Version Tool now names itself.** When findings are left at `needs-triage`
+  *and* `vendor/bin/patch-status` is missing, the scan says so on stderr — where
+  `build-findings.sh` routes it into `scanner_errors` — with the install pointer and the
+  `RUNNER=` hint for containerised stores. Deliberately conditional: a store that has the tool,
+  or one where nothing patch-fixed matched, stays quiet.
+
+### Compatibility
+
+A store previously reported vulnerable to any of the five 2.4.8-p1 advisories, or carrying
+APSB26-73 findings it had already patched, will see those findings disappear. That is the fix,
+not a coverage regression — re-run to get the corrected baseline.
+
 ## [1.30.0] — 2026-07-31 — `magento2-context` called a Breeze storefront "not Breeze"
 
 Found by auditing a real 2.4.9 store: the resolver reported `theme.breeze.active = false` and

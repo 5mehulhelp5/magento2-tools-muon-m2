@@ -60,10 +60,13 @@ def _scalar(value, line_no, raw):
 def parse_version(v, default_patch=0):
     """Parse '2.4.6-p3' into a tuple (2, 4, 6, 3).
 
-    A missing `-pN` suffix takes `default_patch`. For a range UPPER bound that omits the
-    patch (e.g. '2.4.7'), pass default_patch=inf so the bound covers every patch build of
-    that release (2.4.7, 2.4.7-p1, …); otherwise '2.4.7' would parse to (2,4,7,0) and
-    exclude every -pN — a false negative on the most-patched installs.
+    A missing `-pN` suffix takes `default_patch`, which is 0 — '2.4.8' is the BASE release,
+    strictly below '2.4.8-p1'. Both range bounds use this default; see version_in_range for
+    why the upper bound must NOT be inflated.
+
+    `default_patch` is retained as a parameter (rather than inlined) because it is the one
+    knob that decides the base-vs-patch question, and a caller that genuinely wants
+    "any patch build of this release" must say so explicitly at the call site.
     """
     if not v:
         return None
@@ -75,16 +78,41 @@ def parse_version(v, default_patch=0):
 
 
 def version_in_range(v, range_str):
-    """Check if v is in 'A - B' (inclusive) range string."""
+    """Check if v is in 'A - B' (inclusive) range string.
+
+    BOTH bounds treat a missing `-pN` as patch 0, so an upper bound of '2.4.8' means the
+    BASE release only and EXCLUDES 2.4.8-p1.
+
+    WHY NOT default_patch=inf ON THE UPPER BOUND (the behaviour until 2026-07-31): the idea
+    was that '2.4.7' should cover every patch build of 2.4.7, guarding a false negative on
+    the most-patched installs. Measured against the shipped data, that guard protected
+    nothing and cost real accuracy. Every range in magento-cve-data.yaml is one of exactly
+    two shapes:
+
+        537 ranges  upper bound carries an explicit -pN ("2.4.7 - 2.4.7-p5")  -> inf is inert
+         37 ranges  lower == upper, no -pN ("2.4.8 - 2.4.8")                  -> inf OVER-MATCHES
+          0 ranges  lower != upper, no -pN ("2.4.4 - 2.4.7")                  -> the only shape
+                                                                                 inf would help
+
+    The `X - X` shape is precisely how Adobe records "the base release is affected, fixed in
+    the first patch". Inflating its upper bound to infinity made those advisories swallow
+    every later patch build, so a store on the DECLARED-FIXED version was still reported —
+    at confidence `confirmed`, i.e. asserted as fact. Concretely, 2.4.8-p1 was reported
+    vulnerable to CVE-2025-47110 (critical), -43585, -27206, -49549 and -49550, each of whose
+    own `fixed_in` names 2.4.8-p1. Left alone this would also have pinned every APSB26-73
+    finding to 2.4.9 forever, since "2.4.9 - 2.4.9" would swallow 2.4.9-p1 the day it ships.
+
+    The third shape stays unrepresentable rather than merely unused: cve_data_lint rejects a
+    range whose bounds differ and whose upper bound omits -pN, so a curator cannot silently
+    reintroduce the false negative this default used to cover. Write the -pN explicitly.
+    """
     if not range_str or '-' not in range_str:
         return False
     parts = [p.strip() for p in range_str.split(' - ', 1)]
     if len(parts) != 2:
         return False
-    # Lower bound: missing patch ⇒ 0 (>= the base release). Upper bound: missing patch ⇒ inf
-    # (<= every patch build of that release).
     lo = parse_version(parts[0])
-    hi = parse_version(parts[1], default_patch=float('inf'))
+    hi = parse_version(parts[1])
     cur = parse_version(v)
     if not (lo and hi and cur):
         return False

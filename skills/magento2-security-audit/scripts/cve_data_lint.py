@@ -37,6 +37,11 @@ KNOWN_COMPONENTS = ('b2b',)
 # here — under-enforcing is recoverable; rejecting a valid curated entry because this
 # lint guessed would be a self-inflicted wound. Resolve the doc's ambiguity, then tighten.
 REQUIRED_SCALAR = ('cve', 'bulletin_url', 'recorded_at')
+# A `fixed_in` token that names a version a store can actually BE on, as opposed to a
+# pre-release tag ('2.4.9-alpha1') or an isolated-patch label ('2.4.9-2026-jul'). Kept
+# byte-identical to cve-scan.sh's _REAL_VERSION_TOKEN, which gates the same distinction
+# when wording a recommendation.
+_REAL_VERSION_TOKEN = re.compile(r'^\d+\.\d+\.\d+(-p\d+)?$')
 
 
 def _apparent_entry_count(text):
@@ -159,6 +164,24 @@ def validate_text(text):
                         f"{cve}: magento_version_range {rng!r} is not a usable 'A - B' range — "
                         f"the scanner's version_in_range() can never match it against any "
                         f"version, so this advisory is dead on arrival")
+                # An upper bound that omits `-pN` means the BASE release only (see
+                # version_in_range). That is unambiguous when the bounds are EQUAL
+                # ("2.4.8 - 2.4.8" = only 2.4.8) but ambiguous when they differ:
+                # "2.4.4 - 2.4.7" reads as "through 2.4.7" to a human while the matcher
+                # stops at 2.4.7 exactly, silently excluding 2.4.7-p1.. — a false
+                # NEGATIVE, the failure direction that lets a vulnerable store look clean.
+                # No such range exists today; rejecting the shape keeps it that way, so the
+                # inf-upper-bound fix cannot be quietly undone by a future curator writing
+                # the ambiguous form. Spell the intended patch level out.
+                lo_s, sep, hi_s = rng.partition(' - ')
+                if sep and lo_s.strip() != hi_s.strip() and '-p' not in hi_s:
+                    errors.append(
+                        f"{cve}: magento_version_range {rng!r} has differing bounds and an "
+                        f"upper bound with no '-pN' — the matcher reads {hi_s.strip()!r} as "
+                        f"the BASE release and excludes every {hi_s.strip()}-pN, which is "
+                        f"probably not what you meant. Write the highest affected patch "
+                        f"level explicitly (e.g. '{hi_s.strip()}-p5'), or set both bounds "
+                        f"equal if only the base release is affected.")
                 ed = aff.get('edition')
                 if ed and ed not in KNOWN_EDITIONS:
                     errors.append(
@@ -188,6 +211,35 @@ def validate_text(text):
                         f"looks like a 2.x core range — the scanner would range it against "
                         f"b2b_version (a 1.x value) and it would never match. Untag it, or it "
                         f"is a curation error.")
+
+            # --- fixed_in must fall OUTSIDE every affected range ----------------------------
+            # A version listed as the fix cannot also be a version that is vulnerable. When it
+            # is, the scanner reports a store sitting on the declared-fixed version — and for
+            # an ordinary version-fixed advisory it does so at confidence `confirmed`, i.e.
+            # asserted as fact. This is the check that would have caught the inf-upper-bound
+            # bug (2.4.8-p1 reported vulnerable to five advisories whose own fixed_in named
+            # 2.4.8-p1) at curation time instead of in a customer's audit report.
+            #
+            # Only REAL version tokens are cross-checked. `fixed_in` legitimately also carries
+            # pre-release tags ('2.4.9-alpha1') and isolated-patch LABELS ('2.4.9-2026-jul',
+            # the APSB26-73 shape) — a label is a ZIP filename, not a version you can be on,
+            # and parse_version happens to read '2.4.9-2026-jul' as (2,4,9,0), so comparing it
+            # would flag every patch-fixed advisory as contradictory. Mirrors the
+            # _REAL_VERSION_TOKEN gate cve-scan.sh already applies for the same reason.
+            for fx in (rec.get('fixed_in') or []):
+                if not isinstance(fx, str) or not _REAL_VERSION_TOKEN.match(fx.strip()):
+                    continue
+                for aff in affected:
+                    if not isinstance(aff, dict):
+                        continue
+                    rng = aff.get('magento_version_range', '')
+                    if version_in_range(fx.strip(), rng):
+                        errors.append(
+                            f"{cve}: fixed_in {fx!r} still falls inside its own affected range "
+                            f"{rng!r} — a store on the version that FIXES this advisory would "
+                            f"be reported as vulnerable to it. Narrow the range (an upper "
+                            f"bound of '2.4.8' means the base release only and already "
+                            f"excludes 2.4.8-p1), or correct fixed_in.")
 
             comps = {aff.get('component') for aff in affected if isinstance(aff, dict)}
             if len(comps) > 1:
