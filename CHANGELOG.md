@@ -6,6 +6,51 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — patch detection missed Mage-OS entirely
+
+Found by running the 1.31.0 audit against a real Mage-OS 3.2.0 store. Both defects are in code
+1.31.0 shipped; both fail toward over-reporting, never toward a false "clean".
+
+1. **Every curated `detect` marker missed Mage-OS.** The markers are curated against upstream's
+   package layout (`vendor/magento/framework/…`), but Mage-OS is a **fork that renames every
+   package it carries** — `magento/framework` becomes `mage-os/framework`, and a Mage-OS install
+   requires **zero** `magento/*` packages. The curated file therefore does not exist,
+   `patch_state()` returned `PATCH_UNKNOWN`, and a **fully-patched** store reported 12
+   `needs-triage` findings including a Critical. Measured on the real store: the marker *was*
+   present in `vendor/mage-os/framework/…/Sanitizer.php` and matched `patched_signature`
+   exactly — only the vendor prefix differed. This bit hardest precisely where it hurt most:
+   Mage-OS does not ship Adobe's `vendor/bin/patch-status` (that tool ships inside Adobe's own
+   patches), so curated signatures are the *only* detection path on that distribution.
+2. **A null `cve` surfaced as the literal string `None`.** `composer audit` emits the `cve` key
+   with a JSON null for GHSA-only advisories rather than omitting it, and
+   `adv.get('cve', <fallback>)` returns that null — `dict.get` applies its default only when the
+   key is *absent*. Three real `guzzlehttp/guzzle` advisories rendered as *"Upgrade
+   guzzlehttp/guzzle to a version not affected by **None**."*
+
+### Fixed
+
+- **Fork-aware `detect` paths.** `candidate_detect_paths()` tries the declared path first, then
+  the `vendor/mage-os/…` variant. On the real store this took the report from 15 findings to 4 —
+  the 11 CE-bundle advisories now clear correctly, and the remaining CVE-2026-47994 stays
+  `needs-triage` because it is the EE-only advisory whose module genuinely is not installed on an
+  Open Source fork. Curators keep writing the **upstream path only**; no data change, and no
+  second `detect` entry (the lint rejects those, and `patch_state()` reads only `detect[0]`).
+
+  The swap is **unconditional, not gated on the resolved edition** — deliberately. Gating would
+  reintroduce the whole bug for any store whose edition failed to resolve, which is exactly when
+  detection must not quietly stop working, and it cannot false-positive: `vendor/mage-os/…`
+  existing *is* the fork. The declared path is always tried first, so upstream behaviour is
+  unchanged. Anchored on the leading path segment, so a `vendor/magento/` appearing deeper in a
+  path (a nested vendor dir, a fixture) is never rewritten.
+- **Advisory identifiers fall through properly.** `cve or remote_id or advisoryId or 'this
+  advisory'`. Order is part of the contract: `remote_id` carries the id an operator can actually
+  look up (`GHSA-h95v-h523-3mw8`), whereas `advisoryId` is Packagist's internal key
+  (`PKSA-fy2t-3c5f-827y`) — technically an answer, useless as a next step.
+
+Regression-guarded by `tests/test-cve-fork-detect-path.sh` (including that an unpatched fork is
+still caught, and that the upstream path keeps precedence) and
+`tests/test-cve-advisory-identifier.sh`.
+
 ## [1.31.0] — 2026-08-01 — `magento2-security-audit` reported patched stores as vulnerable
 
 Found by auditing a real 2.4.9 store: the report carried CVEs the operator believed were already
