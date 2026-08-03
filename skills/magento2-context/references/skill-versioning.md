@@ -17,7 +17,7 @@ skills evolve.
 | magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
 | magento2-module-upgrade    | 1.2.0   | New deprecation map, BC-break detection rules                       |
-| magento2-security-audit    | 1.8.0   | New CVE source, new pattern, severity calibration change, parser hardening |
+| magento2-security-audit    | 1.8.1   | New CVE source, new pattern, severity calibration change, parser hardening |
 | magento2-performance-audit | 1.2.0   | New pattern, new runtime check, severity calibration change         |
 | magento2-debug             | 1.3.1   | New mode added, output format change                                |
 | magento2-eav-attribute     | 1.3.2   | New entity type supported, new input type, template change          |
@@ -43,7 +43,27 @@ skills evolve.
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-08-01)
+## Changelog (last update: 2026-08-03)
+
+- **`magento2-security-audit` 1.8.0 → 1.8.1 — patch detection now resolves Mage-OS package
+  paths.** Found by running the 1.8.0 audit against a real Mage-OS 3.2.0 store. The curated
+  `detect` markers are written against upstream's layout (`vendor/magento/framework/…`), but
+  Mage-OS is a fork that renames every package it carries and installs **zero** `magento/*`
+  packages — so the marker file did not exist, `patch_state()` returned `PATCH_UNKNOWN`, and a
+  fully-patched store reported 12 `needs-triage` findings including a Critical. The marker itself
+  was present and matched exactly at `vendor/mage-os/framework/…/Sanitizer.php`; only the vendor
+  prefix differed. That mattered most on this distribution precisely because Mage-OS does not
+  ship Adobe's `vendor/bin/patch-status`, leaving curated signatures as the only detection path.
+  `candidate_detect_paths()` now tries the declared path first, then the `vendor/mage-os/…`
+  variant, and `patch_state()` takes the first *readable* candidate rather than the first that
+  merely exists. The swap is unconditional rather than gated on the resolved edition — gating
+  would reintroduce the bug for any store whose edition failed to resolve, and it cannot
+  false-positive since `vendor/mage-os/…` existing is itself the fork. Curators keep writing the
+  upstream path only; no CVE-data change. Also fixed: a composer-audit advisory with a JSON-null
+  `cve` rendered its recommendation as "not affected by **None**" — the fallback now chains
+  `cve → remote_id → advisoryId`, preferring the lookupable GHSA over Packagist's internal PKSA
+  key. Regression-guarded by `tests/test-cve-fork-detect-path.sh` and
+  `tests/test-cve-advisory-identifier.sh`.
 
 - **`magento2-security-audit` 1.7.0 → 1.8.0 — patched stores are no longer reported vulnerable.**
   Three defects, found auditing a real 2.4.9 store whose report carried CVEs the operator had

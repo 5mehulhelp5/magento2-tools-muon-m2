@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — patch detection missed Mage-OS entirely
+## [1.31.1] — 2026-08-03 — patch detection missed Mage-OS entirely
 
 Found by running the 1.31.0 audit against a real Mage-OS 3.2.0 store. Both defects are in code
 1.31.0 shipped; both fail toward over-reporting, never toward a false "clean".
