@@ -46,6 +46,12 @@ Found by running the 1.31.0 audit against a real Mage-OS 3.2.0 store. Both defec
   advisory'`. Order is part of the contract: `remote_id` carries the id an operator can actually
   look up (`GHSA-h95v-h523-3mw8`), whereas `advisoryId` is Packagist's internal key
   (`PKSA-fy2t-3c5f-827y`) — technically an answer, useless as a next step.
+- **`patch_state()` takes the first *readable* candidate, not the first that exists** (raised by
+  Copilot on the PR). Selecting on existence alone meant an unreadable upstream copy — a
+  restrictive bind mount, a transient IO error — consumed the whole lookup and discarded a fork
+  candidate that would have answered, falling to `needs-triage`. Contrived on its own, since a
+  store is normally upstream *or* fork rather than both, but the candidate list is only worth
+  having if it is used fully. Verified against the pre-fix logic: 12 findings before, 1 after.
 
 Regression-guarded by `tests/test-cve-fork-detect-path.sh` (including that an unpatched fork is
 still caught, and that the upstream path keeps precedence) and
