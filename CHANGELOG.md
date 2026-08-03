@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — CVE-2026-47994 claimed an edition it cannot affect
+## [1.31.2] — 2026-08-03 — CVE-2026-47994 claimed an edition it cannot affect
 
 The last false positive from the Mage-OS audit. `CVE-2026-47994` declared both `commerce` and
 `open-source` ranges while Adobe publishes **only `-EE` patch files** for it. On every Open

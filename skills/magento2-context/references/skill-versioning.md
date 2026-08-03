@@ -17,7 +17,7 @@ skills evolve.
 | magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
 | magento2-module-upgrade    | 1.2.0   | New deprecation map, BC-break detection rules                       |
-| magento2-security-audit    | 1.8.1   | New CVE source, new pattern, severity calibration change, parser hardening |
+| magento2-security-audit    | 1.8.2   | New CVE source, new pattern, severity calibration change, parser hardening |
 | magento2-performance-audit | 1.2.0   | New pattern, new runtime check, severity calibration change         |
 | magento2-debug             | 1.3.1   | New mode added, output format change                                |
 | magento2-eav-attribute     | 1.3.2   | New entity type supported, new input type, template change          |
@@ -44,6 +44,22 @@ skills evolve.
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
 ## Changelog (last update: 2026-08-03)
+
+- **`magento2-security-audit` 1.8.1 → 1.8.2 — `CVE-2026-47994` no longer claims an edition it
+  cannot affect.** The advisory declared both `commerce` and `open-source` ranges while Adobe
+  publishes only `-EE` patch files for it, so on every Open Source and Mage-OS store it produced
+  a permanent unclearable High: it matched on version, and its `detect` file lives in a
+  Commerce-only module that is never installed, leaving `patch_state()` at `PATCH_UNKNOWN`
+  forever. Narrowed to `commerce` on four independent Adobe-sourced signals — the patch registry
+  lists it under `-EE` only (and that registry demonstrably distinguishes: 7 CE-only, 3 CE+EE,
+  2 B2B, this the sole EE-only), Adobe's own `patch-status` returns `NOT_APPLICABLE` for it on a
+  real Open Source 2.4.9 store, the vulnerable module is Commerce-only, and no `-CE` patch exists
+  for an Open Source operator to apply. The advisory is **narrowed, not removed**: a Commerce
+  2.4.9 store still reports it. A new lint rule catches the whole class — an EE-patch-only
+  advisory may not carry ranges that reach Open Source, where an **absent** edition counts as
+  reaching it (the matcher treats an unlabelled range as "affects both"). Only that direction is
+  encoded; the mirror is false, since Commerce ships the Open Source codebase underneath.
+  Regression-guarded by `tests/test-cve-ee-only-edition.sh`.
 
 - **`magento2-security-audit` 1.8.0 → 1.8.1 — patch detection now resolves Mage-OS package
   paths.** Found by running the 1.8.0 audit against a real Mage-OS 3.2.0 store. The curated
