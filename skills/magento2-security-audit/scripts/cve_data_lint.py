@@ -265,6 +265,45 @@ def validate_text(text):
                             errors.append(
                                 f"{cve}: a 'fixed_by_patch' entry is missing required 'id' "
                                 f"(got {p!r})")
+                    # An advisory whose ONLY remedy is an Enterprise patch cannot affect an
+                    # Open Source store: the fix lives in EE code, which Open Source does not
+                    # ship, and Adobe publishes no -CE patch an Open Source operator could
+                    # apply. Declaring `open-source` ranges anyway produces a finding that can
+                    # never be confirmed OR cleared — the detect file is in a module that is
+                    # not installed, so patch_state() returns UNKNOWN forever. Measured on
+                    # CVE-2026-47994: a permanent unclearable High on every Open Source and
+                    # Mage-OS store, corroborated by Adobe's own patch-status reporting
+                    # NOT_APPLICABLE for it there.
+                    #
+                    # ONLY this direction is sound. The mirror ("all -CE ids => not commerce")
+                    # is FALSE and must never be added: Adobe Commerce ships the Open Source
+                    # codebase underneath, so a CE patch applies to Commerce stores too — which
+                    # is exactly why 7 of APSB26-73's CE-only advisories legitimately declare
+                    # both editions.
+                    #
+                    # An ABSENT edition counts as open-source here, not just an explicit one.
+                    # match_cves() skips its edition guard when the range declares no edition
+                    # (`elif edition and aff_edition and ...`), so an unlabelled range matches
+                    # EVERY store — open-source included. Checking only `edition ==
+                    # 'open-source'` would leave the identical bug reachable by omission, which
+                    # is the easier mistake to make of the two.
+                    ids = [p.get('id', '') for p in fixed_by_patch if isinstance(p, dict)]
+                    if ids and all(i.endswith('-EE') for i in ids):
+                        reaches_os = [
+                            (aff.get('magento_version_range'), aff.get('edition') or '(absent)')
+                            for aff in affected
+                            if isinstance(aff, dict) and aff.get('edition') != 'commerce'
+                        ]
+                        if reaches_os:
+                            errors.append(
+                                f"{cve}: every 'fixed_by_patch' id is an -EE patch, but the "
+                                f"record has range(s) that reach an Open Source store: "
+                                f"{reaches_os!r} (an absent edition means 'affects both', so it "
+                                f"matches open-source too). An Open Source store cannot apply an "
+                                f"EE patch and does not ship the EE code the fix touches, so "
+                                f"this can only ever yield an unclearable needs-triage finding. "
+                                f"Scope these ranges to `edition: commerce`, or add the -CE "
+                                f"patch id if one genuinely exists.")
 
             # --- detect (optional): non-empty LIST whose first element is a dict carrying ----
             # file / patched_signature / vulnerable_signature. parse_record has NO concept of a
