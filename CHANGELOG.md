@@ -42,6 +42,11 @@ Narrowed to `commerce` on four independent Adobe-sourced signals:
   patch and does not ship the EE code the fix touches, so such a record can only ever yield an
   unclearable `needs-triage` finding.
 
+  **An absent edition counts as open-source here** (raised by Copilot on the PR). `match_cves()`
+  skips its edition guard when a range declares no edition, so an unlabelled range matches
+  *every* store — Open Source included. Checking only an explicit `edition: open-source` would
+  have left the identical defect reachable by omission, which is the easier mistake of the two.
+
   **Only this direction is encoded, deliberately.** The mirror rule — "all `-CE` ids ⇒ not
   commerce" — is **false** and must never be added: Adobe Commerce ships the Open Source
   codebase underneath, so a CE patch applies to Commerce stores too. That is precisely why 7 of
