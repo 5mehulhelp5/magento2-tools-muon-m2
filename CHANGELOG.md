@@ -6,6 +6,51 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — CVE-2026-47994 claimed an edition it cannot affect
+
+The last false positive from the Mage-OS audit. `CVE-2026-47994` declared both `commerce` and
+`open-source` ranges while Adobe publishes **only `-EE` patch files** for it. On every Open
+Source and Mage-OS store that produced a permanent **unclearable High**: the record matched on
+version, and its `detect` file lives in `module-customer-custom-attributes` — a Commerce-only
+module that simply is not installed — so `patch_state()` returned `PATCH_UNKNOWN` forever.
+
+Narrowed to `commerce` on four independent Adobe-sourced signals:
+
+1. **Adobe's patch registry lists it under `-EE` patches only.** That registry demonstrably
+   distinguishes: of APSB26-73's advisories, 7 are CE-only, 3 are CE+EE, 2 are B2B, and this is
+   the *sole* EE-only one — so "EE-only" is a real signal, not a curation artifact.
+2. **Adobe's own `vendor/bin/patch-status` returns `NOT_APPLICABLE`** for it on a real Open
+   Source 2.4.9 store.
+3. The vulnerable module is Commerce-only and absent from Open Source lockfiles.
+4. **No `-CE` patch exists at all** — an Open Source operator has nothing to apply. Had the
+   advisory genuinely affected Open Source, Adobe would have had to ship one.
+
+### Fixed
+
+- **`CVE-2026-47994` is now `commerce`-only.** The advisory is *narrowed, not removed* — a
+  Commerce 2.4.9 store still reports it, verified. Edited in `cve-extract.yaml` and regenerated
+  into `magento-cve-data.yaml` so the two cannot drift; the diff is exactly the 8 open-source
+  range lines and nothing else.
+
+  Store impact: the Mage-OS store goes 4 → **3 findings** (all genuine Guzzle advisories); the
+  Open Source 2.4.9 store stays at 0.
+
+### Added
+
+- **Lint rule: an EE-patch-only advisory may not declare `open-source` ranges.** Catches the
+  whole class at curation time rather than one record. An Open Source store cannot apply an EE
+  patch and does not ship the EE code the fix touches, so such a record can only ever yield an
+  unclearable `needs-triage` finding.
+
+  **Only this direction is encoded, deliberately.** The mirror rule — "all `-CE` ids ⇒ not
+  commerce" — is **false** and must never be added: Adobe Commerce ships the Open Source
+  codebase underneath, so a CE patch applies to Commerce stores too. That is precisely why 7 of
+  this bulletin's CE-only advisories correctly declare *both* editions, and the new test pins
+  that asymmetry down (CE-only, CE+EE and B2B shapes must all stay unflagged).
+
+Regression-guarded by `tests/test-cve-ee-only-edition.sh`, which also asserts the shipped data
+is free of the class and that CVE-2026-47994 still exists and still matches Commerce.
+
 ## [1.31.1] — 2026-08-03 — patch detection missed Mage-OS entirely
 
 Found by running the 1.31.0 audit against a real Mage-OS 3.2.0 store. Both defects are in code

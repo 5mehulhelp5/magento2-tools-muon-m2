@@ -265,6 +265,34 @@ def validate_text(text):
                             errors.append(
                                 f"{cve}: a 'fixed_by_patch' entry is missing required 'id' "
                                 f"(got {p!r})")
+                    # An advisory whose ONLY remedy is an Enterprise patch cannot affect an
+                    # Open Source store: the fix lives in EE code, which Open Source does not
+                    # ship, and Adobe publishes no -CE patch an Open Source operator could
+                    # apply. Declaring `open-source` ranges anyway produces a finding that can
+                    # never be confirmed OR cleared — the detect file is in a module that is
+                    # not installed, so patch_state() returns UNKNOWN forever. Measured on
+                    # CVE-2026-47994: a permanent unclearable High on every Open Source and
+                    # Mage-OS store, corroborated by Adobe's own patch-status reporting
+                    # NOT_APPLICABLE for it there.
+                    #
+                    # ONLY this direction is sound. The mirror ("all -CE ids => not commerce")
+                    # is FALSE and must never be added: Adobe Commerce ships the Open Source
+                    # codebase underneath, so a CE patch applies to Commerce stores too — which
+                    # is exactly why 7 of APSB26-73's CE-only advisories legitimately declare
+                    # both editions.
+                    ids = [p.get('id', '') for p in fixed_by_patch if isinstance(p, dict)]
+                    if ids and all(i.endswith('-EE') for i in ids):
+                        os_ranges = [aff.get('magento_version_range') for aff in affected
+                                     if isinstance(aff, dict)
+                                     and aff.get('edition') == 'open-source']
+                        if os_ranges:
+                            errors.append(
+                                f"{cve}: every 'fixed_by_patch' id is an -EE patch, but the "
+                                f"record declares open-source range(s) {os_ranges!r}. An Open "
+                                f"Source store cannot apply an EE patch and does not ship the "
+                                f"EE code the fix touches, so this can only ever yield an "
+                                f"unclearable needs-triage finding. Drop the open-source "
+                                f"ranges, or add the -CE patch id if one genuinely exists.")
 
             # --- detect (optional): non-empty LIST whose first element is a dict carrying ----
             # file / patched_signature / vulnerable_signature. parse_record has NO concept of a
