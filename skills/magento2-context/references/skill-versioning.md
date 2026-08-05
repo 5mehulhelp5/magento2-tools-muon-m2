@@ -9,12 +9,12 @@ skills evolve.
 
 | Skill                      | Version | Bumped when                                                         |
 |----------------------------|---------|---------------------------------------------------------------------|
-| magento2-context           | 1.12.0  | JSON schema changes, new resolution rules, new tool probes          |
+| magento2-context           | 1.13.0  | JSON schema changes, new resolution rules, new tool probes          |
 | magento2-module-create     | 1.10.2  | New template added, surface added, naming rule changed              |
 | magento2-module-review     | 2.4.0   | New checklist category, severity calibration change, new JSON field, fix-routing change |
-| magento2-feature-implement | 2.14.1  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
-| magento2-bug-fix           | 1.2.0   | Workflow phase change, RCA format change                            |
-| magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
+| magento2-feature-implement | 2.15.0  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
+| magento2-bug-fix           | 1.2.1   | Workflow phase change, RCA format change                            |
+| magento2-deploy            | 1.4.1   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
 | magento2-module-upgrade    | 1.2.0   | New deprecation map, BC-break detection rules                       |
 | magento2-security-audit    | 1.8.2   | New CVE source, new pattern, severity calibration change, parser hardening |
@@ -37,14 +37,26 @@ skills evolve.
 | magento2-docs-generate     | 1.3.1   | New docs (developer/user guide, REST+GraphQL reference), example/diagram derivation |
 | magento2-indexer           | 1.1.2   | New indexer/mview pattern, dimension support                                  |
 | magento2-marketplace-prep  | 1.1.0   | New EQP check, readiness-scoring calibration                                  |
-| magento2-accessibility-audit | 1.1.0 | New WCAG rule, runtime pass change                                            |
+| magento2-accessibility-audit | 1.1.1 | New WCAG rule, runtime pass change                                            |
 | magento2-breeze-child-theme | 1.0.2 | New template/parent variant, theme-layout change                              |
 | magento2-breeze-module-adapt | 1.0.2 | New template/surface, widget-conversion or sequence rule change               |
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-08-04)
+## Changelog (last update: 2026-08-05)
 
+- **Runtime test tooling policy.** New shared reference
+  `magento2-context/references/runtime-test-tooling.md`: REST/GraphQL always use `curl` (no
+  override); admin and storefront smoke use a **headless** browser only; a missing browser is an
+  expected state, not an error; and an explicit user directive ("do not use browser", "use curl")
+  outranks the probe. `magento2-feature-implement` Phase 6B no longer skips S3–S7 when no browser
+  is available — it runs a degraded `curl` reachability tier and emits a mandatory Medium coverage
+  finding naming what was not checked. Authenticated admin work is deliberately not attempted over
+  `curl` (form key + mandatory 2FA). Minor bumps (capability changed): `magento2-context 1.12.0 →
+  1.13.0` (new `tools.curl` and `tools.headless_browser` probes), `magento2-feature-implement
+  2.14.1 → 2.15.0` (Phase 6B fallback behaviour). Patch bumps (delegation pointer / guard only):
+  `magento2-deploy 1.4.0 → 1.4.1`, `magento2-bug-fix 1.2.0 → 1.2.1`,
+  `magento2-accessibility-audit 1.1.0 → 1.1.1`.
 - **`magento2-feature-implement` 2.14.0 → 2.14.1 — Phases 5-7 run without checking in.** Fixes the
   failure mode where a run halted after a task finished — plan approved, work correct, checkbox
   flipped — and waited for the user to type "continue". The skill stated its stopping points

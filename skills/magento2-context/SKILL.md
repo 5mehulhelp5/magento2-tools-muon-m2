@@ -61,7 +61,7 @@ to `.claude/.cache/magento2-context.json`.
 {
   "schemaVersion": "1.0",
   "skill": "magento2-context",
-  "skillVersion": "1.12.0",
+  "skillVersion": "1.13.0",
   "resolvedAt": "2026-05-26T14:30:00Z",
   "cacheKey": "lock:sha256-...;json:sha256-...;claude:sha256-...;m2:sha256-...;env:<M2_MAGENTO_ROOT>|<M2_PHP_CONTAINER>",
 
@@ -115,7 +115,9 @@ to `.claude/.cache/magento2-context.json`.
     "trufflehog": null,
     "node": "node",
     "pa11y": null,
-    "gh": "gh"
+    "gh": "gh",
+    "curl": "curl",
+    "headless_browser": null
   },
 
   "resolution_source": {

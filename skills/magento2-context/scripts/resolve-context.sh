@@ -782,6 +782,56 @@ probe_vendor_tool() {
     printf 'null'
 }
 
+# Headless-browser ladder: playwright → puppeteer → null. Nothing else.
+#
+# A bare `google-chrome` / `chromium` binary does NOT count. smoke-browser.mjs can only
+# drive Playwright or Puppeteer — its raw-CDP path was deleted because it fake-passed every
+# suite — so reporting a browser here on the strength of a Chrome binary would set
+# browser_policy=auto, suppress the mandatory degraded-coverage finding, and let the curl
+# tier run while the report claimed full coverage. That is the exact failure this policy
+# exists to prevent, so the probe reports only backends that can actually drive a page.
+#
+# `--no-install` is deliberate — a probe must never download a package as a side effect.
+# A null result is a normal, expected outcome (see references/runtime-test-tooling.md);
+# it is not an error and never blocks resolution.
+probe_headless_browser() {
+    # A cold `npx` resolution can stall, so guard it with `timeout` where that exists.
+    # `timeout` is absent on stock macOS — probe unguarded there rather than failing.
+    # Plain string, not an array: bash 3.2 (stock macOS) treats "${arr[@]}" on an EMPTY
+    # array as an unbound variable under `set -u`, which would abort the whole resolver.
+    local timeout_prefix=""
+    if command -v timeout >/dev/null 2>&1; then
+        timeout_prefix="timeout 15"
+    fi
+
+    # Mirror smoke-browser.mjs's pickBackend() EXACTLY: it requires both that `npx <tool>
+    # --version` works AND that the module is importable, falling through when either fails.
+    # The CLI alone is not enough — a globally-resolvable `playwright` binary with no
+    # importable module is common (an MCP server install does this), and reporting it would
+    # claim a backend the driver then refuses at exit 78.
+    probe_backend() {
+        command -v npx >/dev/null 2>&1 || return 1
+        command -v node >/dev/null 2>&1 || return 1
+        # shellcheck disable=SC2086  # deliberate: empty prefix must expand to no argument
+        ${timeout_prefix} npx --no-install "$1" --version >/dev/null 2>&1 || return 1
+        # shellcheck disable=SC2086  # deliberate: empty prefix must expand to no argument
+        ${timeout_prefix} node -e "import('$1').then(()=>process.exit(0)).catch(()=>process.exit(1))" \
+            >/dev/null 2>&1 || return 1
+        return 0
+    }
+
+    if probe_backend playwright; then
+        printf '"playwright"'
+        return
+    fi
+    if probe_backend puppeteer; then
+        printf '"puppeteer"'
+        return
+    fi
+
+    printf 'null'
+}
+
 T_PHPCS=$(probe_vendor_tool phpcs)
 T_PHPSTAN=$(probe_vendor_tool phpstan)
 T_PHPUNIT=$(probe_vendor_tool phpunit)
@@ -797,6 +847,8 @@ T_TRUFFLEHOG=$(probe_tool trufflehog 'command -v trufflehog' "trufflehog")
 T_NODE=$(probe_tool node 'command -v node' "node")
 T_PA11Y=$(probe_tool pa11y 'command -v pa11y' "pa11y")
 T_GH=$(probe_tool gh 'command -v gh' "gh")
+T_CURL=$(probe_tool curl 'command -v curl' "curl")
+T_HEADLESS_BROWSER=$(probe_headless_browser)
 
 # --- Assemble JSON ---
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -810,7 +862,7 @@ cat > "$CACHE_TMP" <<EOF
 {
   "schemaVersion": "1.0",
   "skill": "magento2-context",
-  "skillVersion": "1.12.0",
+  "skillVersion": "1.13.0",
   "resolvedAt": "${TIMESTAMP}",
   "cacheKey": $(json_or_null "$CACHE_KEY"),
 
@@ -864,7 +916,9 @@ cat > "$CACHE_TMP" <<EOF
     "trufflehog": ${T_TRUFFLEHOG},
     "node": ${T_NODE},
     "pa11y": ${T_PA11Y},
-    "gh": ${T_GH}
+    "gh": ${T_GH},
+    "curl": ${T_CURL},
+    "headless_browser": ${T_HEADLESS_BROWSER}
   },
 
   "resolution_source": {

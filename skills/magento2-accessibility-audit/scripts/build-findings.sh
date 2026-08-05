@@ -15,7 +15,7 @@
 #                       Pass an absolute or project-root path so an in-`src/` cwd cannot
 #                       redirect output into the Magento tree. See magento2-context/SKILL.md.
 #   OUTPUT_DIR          default: {DOCS_ROOT}/accessibility
-#   SKILL_VERSION       default: 1.1.0
+#   SKILL_VERSION       default: 1.1.1
 #
 # Output:
 #   Writes {OUTPUT_DIR}/{TARGET_MODULE}-a11y-{YYYY-MM-DD}.json (module scope) or
@@ -30,7 +30,7 @@ SCOPE="${SCOPE:-module}"
 THEME="${THEME:-}"
 DOCS_ROOT="${DOCS_ROOT:-.docs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${DOCS_ROOT}/accessibility}"
-SKILL_VERSION="${SKILL_VERSION:-1.1.0}"
+SKILL_VERSION="${SKILL_VERSION:-1.1.1}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EMIT_FINDINGS="${SCRIPT_DIR}/../../magento2-context/scripts/emit-findings.sh"
@@ -120,6 +120,6 @@ export TARGET_MODULE TARGET_PATH SCOPE OUTPUT_DIR
 export SKILL_NAME="magento2-accessibility-audit"
 export SKILL_VERSION
 export OUTPUT_KIND="accessibility"
-export SKILL_VERSIONS_JSON="[\"magento2-accessibility-audit@${SKILL_VERSION}\",\"magento2-context@1.12.0\"]"
+export SKILL_VERSIONS_JSON="[\"magento2-accessibility-audit@${SKILL_VERSION}\",\"magento2-context@1.13.0\"]"
 
 BASENAME_KIND="a11y" bash "$EMIT_FINDINGS"

@@ -91,6 +91,6 @@ export TARGET_MODULE TARGET_PATH SCOPE OUTPUT_DIR
 export SKILL_NAME="magento2-breeze-compat-audit"
 export SKILL_VERSION
 export OUTPUT_KIND="compatibility"
-export SKILL_VERSIONS_JSON="[\"magento2-breeze-compat-audit@${SKILL_VERSION}\",\"magento2-context@1.12.0\"]"
+export SKILL_VERSIONS_JSON="[\"magento2-breeze-compat-audit@${SKILL_VERSION}\",\"magento2-context@1.13.0\"]"
 
 BASENAME_KIND="breeze-compat" bash "$EMIT_FINDINGS"

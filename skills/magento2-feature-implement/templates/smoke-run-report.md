@@ -16,7 +16,9 @@ Triggered by: magento2-feature-implement Phase 6B
 | Admin URL | {/admin or resolved fragment} |
 | Admin user | {user} (password from {CLAUDE.md / env / prompt}) |
 | HTTP client | curl {version} / php-curl / unavailable |
-| Browser | playwright {ver} / puppeteer {ver} / google-chrome {ver} / unavailable |
+| Browser | playwright {ver} / puppeteer {ver} / unavailable (a bare Chrome binary is not a backend) |
+| Browser policy | {auto / curl-only} — {reason: prompt directive / flag / CLAUDE.md / env / unavailable} |
+| Coverage tier | {full / **degraded** — curl tier, S4/S5 and JS flows not covered} |
 | jq | {ver} / unavailable |
 | `exception.log` size at baseline | {bytes} bytes |
 | Logs baselined | {N} files under `var/log/` |
