@@ -8,6 +8,11 @@ report).
 Phase 6B is **mandatory** for `feature` mode. It is reduced in `hotfix` / `extend` modes and
 skipped in `spike` mode (see `modes.md`).
 
+Which tool runs which suite is set by `browser_policy` — see
+`magento2-context/references/runtime-test-tooling.md`. Under `curl-only` (no browser available,
+or the user said not to use one) S2 and S8 are unaffected and S3–S7 run the degraded curl tier
+in `smoke-runner.md` §3.1.
+
 ---
 
 ## Suites
@@ -108,11 +113,16 @@ silently accept all.
 
 Phase 6B passes when, simultaneously:
 
-1. Every applicable suite (S1 + S2–S7 as relevant + S8 + S9) has run to completion.
+1. Every applicable suite (S1 + S2–S7 as relevant + S8 + S9) has run to completion — under
+   `curl-only`, "run to completion" means the degraded curl tier ran, not that the suite was
+   skipped.
 2. S9 records zero Critical and zero High findings.
 3. S8's error-signal diff has no **new or unresolved** gating signals (signals already
    marked `resolved` in findings.md may linger in the diff — see `error-signal-baseline.md`).
    An empty diff trivially satisfies this.
+4. If `browser_policy == curl-only`, the mandatory Medium `coverage` finding is present in
+   `findings.md` and named in the run report. A `curl-only` run that reports full coverage is a
+   defect in the run, not a pass.
 
 Any other outcome triggers the fix loop unless the cap is reached.
 

@@ -68,6 +68,13 @@ the full implementation from analysis through tested, reviewed, reported deliver
   (smoke battery — REST scenarios, admin login, Stores → Config, grids, new routes, customer
   flows, error-signal diff). Phase 7 may not start while any Critical or High smoke finding is
   open. See `references/smoke-test-guide.md`.
+- **Smoke tooling is policy, not preference.** REST and GraphQL scenarios always use `curl`;
+  admin and storefront suites use a **headless** browser and never a headed one or a
+  browser-automation MCP server. A missing browser is expected, not an error — S3–S7 degrade to a
+  curl tier and emit a mandatory Medium coverage finding rather than being skipped. An explicit
+  user directive ("do not use browser", "use curl") outranks every probe. The rules, the
+  precedence order, and the trigger phrasings live in
+  `magento2-context/references/runtime-test-tooling.md`.
 - **Smoke loop is bounded.** Critical/High smoke findings are auto-routed to the right
   `magento2-*` sub-skill for remediation, then Phase 6 re-runs from 6A. The loop halts at **5
   iterations** and asks the user how to proceed (`retry` / `accept-known-issues <IDs>` / `abort`).
@@ -889,7 +896,7 @@ is **mandatory** in `feature` and `extend` modes, **reduced** in `hotfix` mode, 
 - `references/per-task-commits.md`: opt-in per-task git commit format, scoping, failure handling.
 - `references/tdd-mode.md`: opt-in test-first execution — flag/config/env triple, per-mode applicability, how Phase 5 applies the shared `tdd-discipline.md` loop.
 - `references/smoke-test-guide.md`: Phase 6B suites, severity rubric, fix routing, loop control.
-- `references/smoke-runner.md`: environment probe, REST invocation, headless browser commands, fallbacks.
+- `references/smoke-runner.md`: environment probe, browser-policy resolution, REST invocation, headless browser commands, degraded curl tier.
 - `references/error-signal-baseline.md`: byte-offset baseline + tail-since-offset diff for `var/log/exception.log`, every other `var/log/*.log` (level-gated), and `var/report/**` (path+mtime).
 - `templates/feature-blueprint.md`: feature blueprint template.
 - `templates/plan.md`: execution-plan (`plan.md`) template — Mermaid diagrams, Current State checklist, Smoke Iterations, summary. No detailed task records.

@@ -56,4 +56,29 @@ skills/magento2-bug-fix/references/reproduction-patterns.md|bug-fix
 skills/magento2-accessibility-audit/references/runtime-pa11y.md|accessibility-audit
 EOF
 
+# --- 3. feature-implement delegates and no longer skips the browser suites -----
+FI_RUNNER="skills/magento2-feature-implement/references/smoke-runner.md"
+FI_GUIDE="skills/magento2-feature-implement/references/smoke-test-guide.md"
+
+for doc in "$FI_RUNNER" "$FI_GUIDE"; do
+    [ -f "$doc" ] || { fail "feature-implement: $doc not found"; continue; }
+    grep -qF 'magento2-context/references/runtime-test-tooling.md' "$doc" \
+        || fail "feature-implement ($doc) has no pointer to the shared policy"
+done
+
+# REGRESSION GUARD: the old behaviour was "Skip S3-S7; record explicit limitation".
+# Missing browser must now degrade to the curl tier, not vanish. Negated mentions
+# ("does not skip S3-S7") are the CORRECT wording, so exclude them — otherwise the
+# guard fires on the very sentence that documents the fix.
+if grep -iE 'skip S3[-–]S7' "$FI_RUNNER" | grep -qivE "\bnot\b|\bnever\b"; then
+    fail "$FI_RUNNER still instructs skipping S3-S7 instead of degrading to the curl tier"
+fi
+
+grep -qF 'curl tier' "$FI_RUNNER" \
+    || fail "$FI_RUNNER does not describe the degraded curl tier"
+grep -qF 'browser_policy' "$FI_RUNNER" \
+    || fail "$FI_RUNNER does not resolve browser_policy"
+grep -qF 'browser_policy' "$FI_GUIDE" \
+    || fail "$FI_GUIDE does not account for browser_policy in its pass criteria"
+
 exit "$FAIL"

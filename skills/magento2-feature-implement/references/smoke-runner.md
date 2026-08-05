@@ -17,13 +17,15 @@ Never assume a tool exists; degrade explicitly.
 | Admin URL fragment | `{runner} php -r "echo (require '{ctx.magento_root}/app/etc/env.php')['backend']['frontName'] ?? 'admin';"` (layout-aware path — bare `app/etc/env.php` is wrong in a `src/` layout) | Default `/admin` and warn. Pass it to the browser driver as `--admin-path=/<frontName>`. |
 | Admin user | `CLAUDE.md` line `Smoke admin user:` → else env `M2_SMOKE_ADMIN_USER` → else prompt once | Halt S3 only; other suites continue. |
 | Admin password | env `M2_SMOKE_ADMIN_PASS` → else prompt once (echo suppressed). **Do NOT read the password from `CLAUDE.md`** — that file is committed; a password there leaks into version control. (A `Smoke admin pass:` line in CLAUDE.md, if present, must be ignored and the user warned.) | Halt S3 only. |
-| HTTP client | `curl --version` → fallback `{runner} php -r "echo function_exists('curl_init') ? 'php' : 'no';"` | Skip S2; record explicit limitation. |
-| Headless browser | `npx --no-install playwright --version` → fallback `npx --no-install puppeteer --version` | Skip S3–S7; record explicit limitation (the raw-CDP fallback was removed — it fake-passed). |
+| HTTP client | `{ctx.tools.curl}` (resolved by `magento2-context`) → fallback `{runner} php -r "echo function_exists('curl_init') ? 'php' : 'no';"` | Skip S2; record explicit limitation. |
+| Headless browser | `{ctx.tools.headless_browser}` (resolved by `magento2-context`) | **Not an error.** Sets `browser_policy = curl-only`; S3–S7 run the degraded curl tier (§3.1). |
 | Node | `node --version` | Skip browser-dependent suites. |
 | jq | `jq --version` | Optional — fall back to raw JSON in report. |
 
-`google-chrome` is the lowest-common-denominator fallback. The repository's `${CLAUDE_SKILL_DIR}/scripts/smoke-browser.mjs`
-implements all three paths and picks the first available at startup.
+`${CLAUDE_SKILL_DIR}/scripts/smoke-browser.mjs` implements the Playwright → Puppeteer →
+`google-chrome` ladder itself and picks the first available at startup; the probe above only
+records **which** one context resolved, so the run report is honest about what drove the browser
+suites.
 
 ### Production guard
 
@@ -33,6 +35,28 @@ If the URL looks like production AND `CLAUDE.md` does **not** contain
 
 > Base URL `{url}` looks like production. Smoke runs create and delete data; refusing to run.
 > To override, add `Allow smoke on production: true` to CLAUDE.md.
+
+### 1.1 Browser policy for this run
+
+Resolve `browser_policy` (`auto` | `curl-only`) before S2. The precedence table, the exact
+prompt phrasings that select `curl-only`, and the rule against caching the value are defined
+once in `magento2-context/references/runtime-test-tooling.md` — do not restate them here.
+
+Record the outcome in `baseline.txt` and in the run report:
+
+```
+browser_policy: curl-only
+reason: prompt directive ("do not use browser")
+```
+
+Under `curl-only`:
+
+- S2 (REST) and S8 (error signals) run **in full** — they never used a browser.
+- S3–S7 run the degraded curl tier (§3.1) instead of `smoke-browser.mjs`.
+- S9 must emit the mandatory Medium `coverage` finding defined by the shared policy.
+
+`auto` is the only other value; there is no way to force a browser for REST (Rule 1 of the
+shared policy is absolute).
 
 ---
 
@@ -93,10 +117,40 @@ The wrapper:
 ```
 if (npx playwright is available)        → Playwright (chromium, headless)
 else if (npx puppeteer is available)    → Puppeteer
-else                                    → exit 78 (unavailable); skill marks browser suites as skipped
+else                                    → exit 78 (unavailable)
 ```
 
 Exit codes: `0` = pass, `1` = at least one finding, `78` = tool unavailable.
+
+An exit `78` — or a run where `browser_policy == curl-only` before the script is even reached —
+does **not** skip S3–S7. It routes them to §3.1.
+
+### 3.1 Degraded curl tier (S3–S7 without a browser)
+
+Used whenever `browser_policy == curl-only`. What it asserts, what it deliberately does not
+attempt, and the mandatory Medium `coverage` finding are defined in
+`magento2-context/references/runtime-test-tooling.md` §Rule 5. The per-suite mapping:
+
+| Suite | Under `auto` | Under `curl-only` |
+|-------|--------------|-------------------|
+| S3 Admin login | `admin-login` drives the form, asserts dashboard + no console error | `curl -s -o /dev/null -w '%{http_code}' "{base}/{adminPath}"` → expect 302 or 200. **No authentication attempted** (form key + mandatory 2FA). |
+| S4 Stores → Configuration | walks each new/changed section | **Not covered** — needs an admin session. Named in the coverage finding. |
+| S5 Admin grids | loads each grid, applies a filter | **Not covered** — needs an admin session. Named in the coverage finding. |
+| S6 New / changed routes | render + click CTA + console errors | per admin route: expect 302 to login (proves registered, not 404/500). Per frontend route: expect non-5xx, plus the route's expected-marker grep when the task recorded one. |
+| S7 Customer storefront flows | registers a throwaway customer, logs in, walks My Account | REST customer-token scenarios in S2 already prove auth works. Storefront pages: `GET` each, expect non-5xx. JS-driven cart and checkout are **not covered**. |
+
+Example, per route:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -A 'magento2-smoke' "{base_url}{route}"
+```
+
+Store each raw response under `smoke/raw/S{n}/{slug}.txt` exactly as the browser tier stores
+screenshots, so a failure is debuggable from the artefacts alone.
+
+A 5xx here is **Critical**, identical to the browser tier — the tier is degraded in coverage,
+not in severity. No screenshots are produced; the run report's screenshot section says
+`none — curl tier` rather than being omitted.
 
 ---
 
