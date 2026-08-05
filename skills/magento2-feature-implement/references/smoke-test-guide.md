@@ -120,9 +120,10 @@ Phase 6B passes when, simultaneously:
 3. S8's error-signal diff has no **new or unresolved** gating signals (signals already
    marked `resolved` in findings.md may linger in the diff — see `error-signal-baseline.md`).
    An empty diff trivially satisfies this.
-4. If `browser_policy == curl-only`, the mandatory Medium `coverage` finding is present in
-   `findings.md` and named in the run report. A `curl-only` run that reports full coverage is a
-   defect in the run, not a pass.
+4. If the degraded curl tier ran at all — because `browser_policy == curl-only`, **or** because
+   the browser driver exited `78` despite a policy of `auto` — the mandatory Medium `coverage`
+   finding is present in `findings.md` and named in the run report. A run that used the curl
+   tier but reports full coverage is a defect in the run, not a pass.
 
 Any other outcome triggers the fix loop unless the cap is reached.
 

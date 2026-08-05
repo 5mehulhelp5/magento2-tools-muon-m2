@@ -25,7 +25,7 @@ command. If exit non-zero or command not found → record `null`.
 | `pa11y`        | `command -v pa11y && pa11y --version`                                 | `"pa11y"`                   |
 | `gh`           | `command -v gh && gh --version`                                       | `"gh"`                      |
 | `curl`         | `command -v curl && curl --version`                                   | `"curl"`                    |
-| `headless_browser` | `npx --no-install playwright --version` → `npx --no-install puppeteer --version` → `command -v google-chrome \|\| chromium \|\| chromium-browser` | `"playwright"` / `"puppeteer"` / `"google-chrome"` / `null` |
+| `headless_browser` | per backend: `npx --no-install <tool> --version` **and** `node -e "import('<tool>')"` must both succeed; playwright → puppeteer | `"playwright"` / `"puppeteer"` / `null` |
 
 ## Runner Awareness
 
@@ -54,9 +54,25 @@ assumed to exist in CI or sandboxed sessions, and every skill that would drive o
 tier instead. See `magento2-context/references/runtime-test-tooling.md` for the policy that
 consumes this field.
 
+**Only Playwright and Puppeteer count.** A bare `google-chrome`, `chromium`, or
+`chromium-browser` binary must never be reported here, however tempting: the only consumer,
+`magento2-feature-implement/scripts/smoke-browser.mjs`, can drive nothing else — its raw-CDP
+rung was deleted because it fake-passed every suite. Reporting a browser on the strength of a
+Chrome binary would resolve `browser_policy` to `auto`, suppress the mandatory
+degraded-coverage finding, and let the curl tier run while the report claimed full coverage.
+That is precisely the failure the policy exists to prevent, so the probe and the driver
+enumerate the same two backends and nothing more.
+
+**The CLI alone is not enough.** `smoke-browser.mjs` requires both that `npx <tool> --version`
+works *and* that the module is importable, so the probe checks both and mirrors the driver
+exactly. A globally-resolvable `playwright` binary with no importable module is common — an MCP
+server install produces one — and reporting it would claim a backend the driver then refuses
+at exit `78`, leaving the run report saying `auto` while the curl tier actually ran.
+
 The probe never launches a browser and never installs one — `npx --no-install` is deliberate, so
-a probe cannot pull a package down as a side effect. It is wrapped in `timeout 15` when `timeout`
-is available, because a cold `npx` resolution can otherwise stall the whole context resolution.
+a probe cannot pull a package down as a side effect. Each step is wrapped in `timeout 15` when
+`timeout` is available, because a cold `npx` resolution can otherwise stall the whole context
+resolution.
 
 ## Why Probe at All
 

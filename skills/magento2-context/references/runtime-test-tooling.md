@@ -30,7 +30,13 @@ for an HTTP API.
 
 Drive them through the owning skill's own script (`magento2-feature-implement` uses
 `${CLAUDE_PLUGIN_ROOT}/skills/magento2-feature-implement/scripts/smoke-browser.mjs`, which walks
-Playwright → Puppeteer → `google-chrome`). Always headless.
+Playwright → Puppeteer and stops there). Always headless.
+
+**A bare Chrome or Chromium binary is not a browser backend.** `google-chrome`, `chromium`, and
+`chromium-browser` cannot drive these suites — the raw-CDP rung that used one was deleted for
+fake-passing — so `ctx.tools.headless_browser` reports Playwright, Puppeteer, or `null`, and
+nothing else. A machine with Chrome installed but no Playwright/Puppeteer is a `curl-only`
+machine.
 
 - Never launch a headed or visible browser. These runs are unattended.
 - Never assume an interactive browser-automation MCP server is attached. Skills must work in CI
@@ -103,7 +109,12 @@ rather than faked.
 
 ### The degraded-coverage finding is mandatory
 
-Every `curl-only` run emits one **Medium** finding, category `coverage`, naming exactly what was
+The trigger is **"the curl tier ran"**, not "`browser_policy` was `curl-only`". If the policy
+resolved to `auto` but the browser turned out unusable at runtime (the driver exits `78`), the
+finding is still mandatory — otherwise a probe that is wrong in the optimistic direction
+silently buys back the fake-pass this rule exists to block.
+
+Every such run emits one **Medium** finding, category `coverage`, naming exactly what was
 not checked — JS console errors, render assertions, click-through, and any authenticated screen.
 Medium does not gate, so the run may still pass; but the finding must appear in the run report
 and in the consuming skill's final limitations section.

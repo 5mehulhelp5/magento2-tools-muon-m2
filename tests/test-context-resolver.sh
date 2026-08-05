@@ -104,8 +104,11 @@ for key in ("curl", "headless_browser"):
         print(f"FAIL: tools.{key} missing from resolver output (must be present, may be null)")
         sys.exit(1)
 
+# Only backends smoke-browser.mjs can actually drive. A bare google-chrome/chromium binary
+# must NOT be reported: the raw-CDP path was deleted for fake-passing, so claiming a browser
+# on the strength of a Chrome binary would suppress the degraded-coverage finding.
 hb = tools.get("headless_browser")
-allowed = {None, "playwright", "puppeteer", "google-chrome", "chromium", "chromium-browser"}
+allowed = {None, "playwright", "puppeteer"}
 if hb not in allowed:
     print(f"FAIL: tools.headless_browser={hb!r} not one of {sorted(str(a) for a in allowed)}")
     sys.exit(1)

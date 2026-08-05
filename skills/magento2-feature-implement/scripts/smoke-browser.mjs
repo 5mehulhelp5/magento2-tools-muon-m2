@@ -4,7 +4,9 @@
 // Selects the first available backend at startup:
 //   1. Playwright (`npx playwright`) — preferred
 //   2. Puppeteer  (`npx puppeteer`)
-//   3. Raw CDP    (spawn `google-chrome --headless --remote-debugging-port=...`)
+//   ...and nothing else. A bare `google-chrome` / `chromium` binary is NOT a backend: the
+//   raw-CDP rung that used one was deleted for fake-passing every suite (see the exit-78
+//   block). `magento2-context`'s tools.headless_browser probe mirrors this exactly.
 //
 // Commands (one-shot, stateless; admin auth is established by admin-login, which SAVES the
 // session cookies to a file the later commands re-load via --admin-cookie-file). There is no
@@ -81,9 +83,9 @@ async function pickBackend() {
       if (pp) return { kind: "puppeteer", lib: pp };
     } catch { /* fall through */ }
   }
-  if (hasCommand("google-chrome", ["--version"]) || hasCommand("chromium", ["--version"])) {
-    return { kind: "cdp" };
-  }
+  // Deliberately no Chrome/Chromium binary rung. The raw-CDP path that consumed it was
+  // deleted (see the exit-78 block below), and nothing handles kind:"cdp" any more — so
+  // returning one here only made a bare Chrome install *look* like a usable backend.
   return null;
 }
 

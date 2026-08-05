@@ -22,10 +22,13 @@ Never assume a tool exists; degrade explicitly.
 | Node | `node --version` | Skip browser-dependent suites. |
 | jq | `jq --version` | Optional — fall back to raw JSON in report. |
 
-`${CLAUDE_SKILL_DIR}/scripts/smoke-browser.mjs` implements the Playwright → Puppeteer →
-`google-chrome` ladder itself and picks the first available at startup; the probe above only
-records **which** one context resolved, so the run report is honest about what drove the browser
-suites.
+`${CLAUDE_SKILL_DIR}/scripts/smoke-browser.mjs` implements the Playwright → Puppeteer ladder
+itself and picks the first available at startup; the probe above only records **which** one
+context resolved, so the run report is honest about what drove the browser suites.
+
+There is no third rung. A bare `google-chrome` / `chromium` binary cannot drive these suites —
+the raw-CDP path that used one was deleted for fake-passing — so a machine with Chrome but no
+Playwright/Puppeteer resolves to `curl-only`.
 
 ### Production guard
 
@@ -123,7 +126,10 @@ else                                    → exit 78 (unavailable)
 Exit codes: `0` = pass, `1` = at least one finding, `78` = tool unavailable.
 
 An exit `78` — or a run where `browser_policy == curl-only` before the script is even reached —
-does **not** skip S3–S7. It routes them to §3.1.
+does **not** skip S3–S7. It routes them to §3.1, **and makes the §3.1 coverage finding
+mandatory even though the policy said `auto`**. The finding is gated on the curl tier having
+run, not on the policy value, so an over-optimistic probe cannot silently buy back a full-
+coverage claim.
 
 ### 3.1 Degraded curl tier (S3–S7 without a browser)
 

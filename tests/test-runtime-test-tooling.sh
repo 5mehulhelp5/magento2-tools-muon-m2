@@ -81,4 +81,34 @@ grep -qF 'browser_policy' "$FI_RUNNER" \
 grep -qF 'browser_policy' "$FI_GUIDE" \
     || fail "$FI_GUIDE does not account for browser_policy in its pass criteria"
 
+# --- 4. The probe and the driver enumerate the SAME backends -------------------
+# A bare google-chrome/chromium binary is not a backend: smoke-browser.mjs deleted its
+# raw-CDP rung for fake-passing. If the context probe ever reports one again, browser_policy
+# resolves to `auto`, the mandatory coverage finding is suppressed, and the curl tier runs
+# while the report claims full coverage — the exact fake-pass this policy exists to block.
+RESOLVER="skills/magento2-context/scripts/resolve-context.sh"
+DRIVER="skills/magento2-feature-implement/scripts/smoke-browser.mjs"
+
+if [ -f "$RESOLVER" ]; then
+    # Look only inside the probe function, so unrelated prose elsewhere cannot trip this.
+    probe_body="$(sed -n '/^probe_headless_browser()/,/^}/p' "$RESOLVER")"
+    if [ -z "$probe_body" ]; then
+        fail "$RESOLVER has no probe_headless_browser function"
+    elif printf '%s' "$probe_body" | grep -qE "printf '\"(google-chrome|chromium|chromium-browser)\""; then
+        fail "$RESOLVER probe reports a bare Chrome/Chromium binary as a headless browser backend"
+    fi
+else
+    fail "$RESOLVER not found"
+fi
+
+if [ -f "$DRIVER" ]; then
+    # Strip `//` comment lines first: the file legitimately *discusses* the removed cdp
+    # backend, and matching that prose would fire on the very note explaining the fix.
+    if grep -vE '^\s*(//|\*|/\*)' "$DRIVER" | grep -qE 'return\s*\{\s*kind:\s*"cdp"'; then
+        fail "$DRIVER reintroduced the raw-CDP backend that fake-passed smoke suites"
+    fi
+else
+    fail "$DRIVER not found"
+fi
+
 exit "$FAIL"

@@ -50,7 +50,7 @@ Env vars win over `.claude/m2.json`:
 | `M2_CACHE_TTL` | `86400` (24h) | Context cache TTL in seconds; `0` disables caching. |
 | `MAGENTO2_FI_PER_TASK_COMMITS` | unset | `1` enables per-task git commits in `magento2-feature-implement`. |
 | `MAGENTO2_FI_TDD` | unset | `1` turns on **test-first (TDD) mode** in `magento2-feature-implement`: behaviour-bearing `M*`/`X*` tasks are implemented test-first (write the failing test, watch it fail, then the minimal code). Off by default; `spike` mode always exempt. |
-| `MAGENTO2_SMOKE_NO_BROWSER` | unset | `1` forces **curl-only** smoke testing: REST and error-signal suites run in full, admin/storefront suites run a degraded curl reachability tier and emit a Medium coverage finding. Use in CI where no headless browser is installed. Outranked only by an explicit prompt directive or the `--no-browser` flag. |
+| `MAGENTO2_SMOKE_NO_BROWSER` | unset | `1` forces **curl-only** smoke testing: REST and error-signal suites run in full, admin/storefront suites run a degraded curl reachability tier and emit a Medium coverage finding. Use in CI where no headless browser is installed. Lowest-priority of the explicit switches — outranked by a prompt directive, the `--no-browser` flag, and `CLAUDE.md`'s `Smoke browser: off`. |
 
 ## `.claude/m2.json`
 
