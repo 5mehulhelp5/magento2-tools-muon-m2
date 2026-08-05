@@ -6,6 +6,49 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — smoke tests assumed a browser was there
+
+Phase 6B's admin and storefront suites (S3–S7) were driven by a headless browser, and when none
+was found they were **skipped**. On a CI runner or a sandboxed session — the common case — that
+left zero signal on the admin and the storefront while the run still reported a pass. Nothing
+told a run to prefer `curl` for REST either, so an agent with browser-automation MCP servers
+attached could reach for one and observe a login redirect where it needed to observe a `401`.
+And a user who typed "do not use browser" was simply ignored.
+
+### Added
+
+- **Runtime test tooling policy** (`magento2-context/references/runtime-test-tooling.md`) — REST
+  and GraphQL testing always uses `curl`, with no override; admin and storefront smoke uses a
+  headless browser only, never a headed one and never a browser-automation MCP server; browsers
+  are never assumed to be installed. An explicit user directive ("do not use browser", "use
+  curl"), a `--no-browser` / `--curl-only` flag, `CLAUDE.md`'s `Smoke browser: off`, or
+  `MAGENTO2_SMOKE_NO_BROWSER=1` all force curl-only testing, in that precedence order. The
+  resolved `browser_policy` is deliberately **not** cached: the context cache is keyed on
+  `composer.lock`, so a prompt-scoped directive persisted there would leak into unrelated runs.
+- **`magento2-context` 1.12.0 → 1.13.0** — new `tools.curl` and `tools.headless_browser` probes
+  (Playwright → Puppeteer → `google-chrome` → `chromium`), so browser availability is resolved
+  once instead of re-derived per skill. `null` is a first-class, expected value.
+- `tests/test-runtime-test-tooling.sh` — guards the policy's five rules, the six-row precedence
+  ladder, each consumer's pointer, and the "no longer skips S3–S7" regression.
+
+### Changed
+
+- **`magento2-feature-implement` 2.14.1 → 2.15.0** — Phase 6B no longer skips the admin and
+  storefront suites when no headless browser is available. It runs a degraded `curl` reachability
+  tier (admin returns 302-to-login, each feature-owned route returns non-5xx plus an optional
+  marker grep) and emits a **mandatory Medium coverage finding** naming exactly what was not
+  checked. A 5xx stays Critical — the tier is degraded in coverage, not in severity. Authenticated
+  admin screens are reported as *not covered* rather than faked: Magento 2.4 requires a form key
+  and mandatory 2FA, so a scripted `curl` login would fail for environmental reasons and misreport
+  as a product defect.
+- **`magento2-deploy` 1.4.0 → 1.4.1** — deploy smoke stays `curl`/CLI and never escalates to a
+  browser; rendering is Phase 6B's job, not the deploy gate's.
+- **`magento2-bug-fix` 1.2.0 → 1.2.1** — frontend reproduction drives a headless browser only.
+  Under `curl-only` it records the manual repro recipe and marks the JS-level reproduction
+  unverified, instead of fabricating a "reproduced".
+- **`magento2-accessibility-audit` 1.1.0 → 1.1.1** — the opt-in pa11y runtime pass gains a fourth
+  precondition: `browser_policy` must be `auto`.
+
 ## [1.31.3] — 2026-08-04 — feature-implement stopped between tasks and waited to be told to continue
 
 A `magento2-feature-implement` run halted after a task finished — plan approved, work correct,

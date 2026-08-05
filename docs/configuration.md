@@ -50,6 +50,7 @@ Env vars win over `.claude/m2.json`:
 | `M2_CACHE_TTL` | `86400` (24h) | Context cache TTL in seconds; `0` disables caching. |
 | `MAGENTO2_FI_PER_TASK_COMMITS` | unset | `1` enables per-task git commits in `magento2-feature-implement`. |
 | `MAGENTO2_FI_TDD` | unset | `1` turns on **test-first (TDD) mode** in `magento2-feature-implement`: behaviour-bearing `M*`/`X*` tasks are implemented test-first (write the failing test, watch it fail, then the minimal code). Off by default; `spike` mode always exempt. |
+| `MAGENTO2_SMOKE_NO_BROWSER` | unset | `1` forces **curl-only** smoke testing: REST and error-signal suites run in full, admin/storefront suites run a degraded curl reachability tier and emit a Medium coverage finding. Use in CI where no headless browser is installed. Outranked only by an explicit prompt directive or the `--no-browser` flag. |
 
 ## `.claude/m2.json`
 
@@ -69,6 +70,7 @@ Skills read your project's `CLAUDE.md` for these lines:
 | `Allow smoke on production: true` | feature-implement smoke runner | Permits Phase 6B smoke tests against a production base URL (refused otherwise) |
 | `Feature implement: per-task commits = on` | feature-implement | Same as `MAGENTO2_FI_PER_TASK_COMMITS=1` / `--per-task-commits` |
 | `Feature implement: tdd = on` | feature-implement | Same as `MAGENTO2_FI_TDD=1` / `--tdd` — behaviour tasks implemented test-first (red → green → refactor) |
+| `Smoke browser: off` | feature-implement, accessibility-audit | Same as `MAGENTO2_SMOKE_NO_BROWSER=1` / `--no-browser` — smoke and the pa11y runtime pass never drive a browser |
 | `Explorer model: sonnet` | feature-implement / module-review / bug-fix | Model tier (`haiku`/`sonnet`/`opus`) for the read-only `magento2-explorer` comprehension agent. Defaults to `haiku`; name the tier that matches your session model to run it there. Does not affect `magento2-reviewer`. |
 | MySQL slow-log path | performance-audit / debug | Where to read the slow query log when non-default |
 
@@ -129,6 +131,40 @@ Domain calibrations: security findings are bumped by PCI/GDPR impact
 (`skills/magento2-security-audit/references/severity-security.md`); performance
 findings are weighted by impact at scale
 (`skills/magento2-performance-audit/references/severity-perf.md`).
+
+## Smoke test tooling
+
+Skills that exercise a running Magento instance follow one policy, defined in
+`skills/magento2-context/references/runtime-test-tooling.md`:
+
+- **REST, GraphQL, and every Web-API surface use `curl`** — always, with no override. A browser
+  masks the contract under test.
+- **Admin and storefront smoke use a headless browser**, never a headed one and never a
+  browser-automation MCP server.
+- **A browser is never assumed to exist.** When none is found, admin/storefront suites degrade to
+  unauthenticated `curl` reachability checks and the run emits a Medium coverage finding naming
+  what was not verified.
+
+To force curl-only testing, in priority order:
+
+```bash
+# 1. Say so in the prompt — highest priority
+#    "implement X, do not use browser"   /   "…use curl for the smoke tests"
+
+# 2. Flag
+/magento2-tools:magento2-feature-implement "add X" --no-browser
+
+# 3. CLAUDE.md
+echo 'Smoke browser: off' >> CLAUDE.md
+
+# 4. Environment
+export MAGENTO2_SMOKE_NO_BROWSER=1
+```
+
+Authenticated admin screens (Stores → Configuration walks, admin grids) are **not** covered by
+the curl tier — Magento 2.4 requires a form key and mandatory 2FA, so a scripted admin login
+would fail for environmental reasons and misreport as a product defect. Those suites are listed
+as not covered rather than faked.
 
 ## Production safety switches
 
