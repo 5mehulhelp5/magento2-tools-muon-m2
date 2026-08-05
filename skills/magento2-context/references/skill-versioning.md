@@ -12,7 +12,7 @@ skills evolve.
 | magento2-context           | 1.12.0  | JSON schema changes, new resolution rules, new tool probes          |
 | magento2-module-create     | 1.10.2  | New template added, surface added, naming rule changed              |
 | magento2-module-review     | 2.4.0   | New checklist category, severity calibration change, new JSON field, fix-routing change |
-| magento2-feature-implement | 2.14.0  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
+| magento2-feature-implement | 2.14.1  | New phase, new approval gate, mode added, new task types (I/C/L/Q), template structure change, delegation/fallback discipline, advisory model-tier field |
 | magento2-bug-fix           | 1.2.0   | Workflow phase change, RCA format change                            |
 | magento2-deploy            | 1.4.0   | Deploy plan template change, rollback recipe change                 |
 | magento2-test-generate     | 1.2.1   | Generator pattern change, new test type added                       |
@@ -43,7 +43,23 @@ skills evolve.
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-08-03)
+## Changelog (last update: 2026-08-04)
+
+- **`magento2-feature-implement` 2.14.0 → 2.14.1 — Phases 5-7 run without checking in.** Fixes the
+  failure mode where a run halted after a task finished — plan approved, work correct, checkbox
+  flipped — and waited for the user to type "continue". The skill stated its stopping points
+  positively (`Wait for explicit approval` at the Phase 2 blueprint gate and the Phase 4 plan gate)
+  but never stated the negative for Phase 5, and the one instruction covering task boundaries — the
+  Per-task completion protocol's `Do not begin the next task until plan.md shows [x]` — is an
+  ordering constraint on bookkeeping phrased as a prohibition, sitting exactly where a task ends.
+  Adds a **Continuous execution** Core Rule (no check-ins between tasks or at phase boundaries once
+  the plan gate is passed; the closed list of sanctioned stops is blocking ambiguity, an input the
+  run cannot obtain itself, the 5-iteration Phase 6B smoke cap, and Phase 7B delivered), marks
+  protocol step 4 explicitly non-terminal, adds **step 5** (immediately begin the next unchecked
+  task, same turn, no progress summary) so every task type ends in "start the next one" rather than
+  in bookkeeping, and scopes the `plan.md` preamble to runs interrupted **from outside**. No new
+  phase/gate/mode/task-type; the Phase 2 and Phase 4 gates are untouched. Pinned `@version` tokens
+  updated. Bundled in plugin **1.31.3**.
 
 - **`magento2-security-audit` 1.8.1 → 1.8.2 — `CVE-2026-47994` no longer claims an edition it
   cannot affect.** The advisory declared both `commerce` and `open-source` ranges while Adobe

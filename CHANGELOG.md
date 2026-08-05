@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — feature-implement stopped between tasks and waited to be told to continue
+## [1.31.3] — 2026-08-04 — feature-implement stopped between tasks and waited to be told to continue
 
 A `magento2-feature-implement` run halted after a task finished — plan approved, work correct,
 checkbox flipped — and handed back to the user, who had to type "continue" to get the next task
