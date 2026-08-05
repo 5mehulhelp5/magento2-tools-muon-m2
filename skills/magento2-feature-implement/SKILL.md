@@ -41,6 +41,19 @@ the full implementation from analysis through tested, reviewed, reported deliver
   index — before approving. They are still kept **out** of `plan.md` itself (no duplication).
 - **Ask once.** Gather all clarifying questions in a single batch during Phase 1. Never interrupt
   mid-execution with more questions unless a blocking ambiguity is discovered.
+- **Continuous execution.** Once the Phase 4 plan gate is passed, Phases 5-7 run to completion in
+  one uninterrupted stretch. **Do not pause to check in with the user between tasks** — "Should I
+  continue?" prompts and progress summaries waste their time; the user approved the plan, so
+  execute it. **Finishing a task is not a stopping point.** Completing a task, flipping its `[x]`
+  in `plan.md`, and making its commit are the *cue to start the next task in the same turn* — not
+  a hand-back. The same applies at phase boundaries: roll from the last Phase 5 task into Phase 6,
+  and from 6 into 7, without asking. After the plan gate the **only** sanctioned stops are:
+  (a) a blocking ambiguity no reasonable assumption can resolve (per **Ask once**);
+  (b) an input the run cannot obtain itself — e.g. a smoke admin credential (`references/smoke-runner.md`);
+  (c) the 5-iteration smoke cap in Phase 6B; and
+  (d) Phase 7B delivered — the run is done.
+  Anything else — "task X complete, ready for Y?", a mid-run status recap, waiting for "continue" —
+  is a defect in the run, not politeness.
 - **Review every module.** After creating or modifying any module, invoke `magento2-module-review`.
   Fix all Critical and High findings before continuing to the next task.
 - **Tests must pass.** All unit tests must complete with zero failures before Phase 7. Never mark
@@ -159,7 +172,10 @@ Every feature gets its own subfolder under `.docs/`. Create it at the start of P
 - The task dependency graph (Mermaid `graph LR`)
 - A **Current State** section listing every task as a checkbox (`- [ ]` pending / `- [x]` done).
 
-After each task completes in Phase 5, mark its checkbox `[x]` in `plan.md` and save immediately.
+After each task completes in Phase 5, mark its checkbox `[x]` in `plan.md` and save immediately,
+then continue straight into the next task. `plan.md` exists so an **externally** interrupted run
+can be picked up — it is not a licence to interrupt the run yourself (Core Rules →
+**Continuous execution**).
 
 ---
 
@@ -411,9 +427,14 @@ the next task**, run these steps in order:
    `- [x] {ID}: {Title}` so resume can still see it.
 3. If per-task commits are enabled (see Core Rules), make the commit now.
 4. Do **not** begin the next task until `plan.md` shows `[x]` for the task just finished.
+   This is an *ordering* constraint on steps 1-3, not a pause: it sequences the bookkeeping
+   ahead of the next task, it does not end the turn.
+5. **Immediately begin the next unchecked task** — in the same turn, with no progress summary
+   and no check-in (Core Rules → **Continuous execution**). When the task just closed was the
+   last one, roll straight into Phase 6.
 
 Every task subsection below ends with **"→ run the Per-task completion protocol"** — that is
-the cue to perform these four steps. When tasks run in parallel (same wave), apply the
+the cue to perform these five steps. When tasks run in parallel (same wave), apply the
 protocol once per task as each one finishes, not once for the whole wave.
 
 ### Fallback discipline (applies to every delegating task below)

@@ -6,6 +6,46 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — feature-implement stopped between tasks and waited to be told to continue
+
+A `magento2-feature-implement` run halted after a task finished — plan approved, work correct,
+checkbox flipped — and handed back to the user, who had to type "continue" to get the next task
+started. It looked arbitrary because it was: nothing in the run had actually gone wrong.
+
+The skill declared its stopping points positively (`Wait for explicit approval` at the Phase 2
+blueprint gate and the Phase 4 plan gate) but never stated the negative for Phase 5. The one place
+that spoke to task boundaries pushed the wrong way: the **Per-task completion protocol** closed
+with `Do not begin the next task until plan.md shows [x]` — an ordering constraint on the
+bookkeeping, phrased as a prohibition, sitting exactly where a task ends. Read at execution time
+that is a stop signal. `plan.md` being introduced as "the single source of truth for resuming
+interrupted runs" reinforced it: if resuming is a first-class feature, interrupting looks routine.
+
+### Fixed
+
+- **`magento2-feature-implement` 2.14.0 → 2.14.1 — Phases 5-7 now run without checking in.** Adds a
+  **Continuous execution** Core Rule: once the Phase 4 plan gate is passed, the run goes to
+  completion in one uninterrupted stretch. *Do not pause to check in with the user between tasks —
+  "Should I continue?" prompts and progress summaries waste their time; the user approved the plan,
+  so execute it.* Finishing a task is explicitly **not** a stopping point: flipping the `[x]` and
+  making the commit are the cue to start the next task in the same turn. Phase boundaries roll
+  through too (last Phase 5 task → Phase 6 → Phase 7), no asking.
+
+  The rule names the **only** sanctioned stops after the plan gate, so the closed list is stated
+  rather than inferred: a blocking ambiguity no reasonable assumption can resolve (per **Ask
+  once**); an input the run cannot obtain itself, e.g. a smoke admin credential; the 5-iteration
+  smoke cap in Phase 6B; and Phase 7B delivered. Anything else — a mid-run status recap, waiting
+  for "continue" — is called out as a defect in the run, not politeness.
+
+  The two supporting edits close the paths that produced the stop. The Per-task completion
+  protocol's step 4 now says in-line that it is an *ordering* constraint on steps 1-3, not a pause,
+  and gains a **step 5** that makes continuation an instruction rather than an inference —
+  *immediately begin the next unchecked task, same turn, no progress summary* — so every task type
+  ends in "start the next one" instead of ending in bookkeeping. And the `plan.md` preamble is
+  scoped to **externally** interrupted runs: it is not a licence to interrupt the run yourself.
+
+  No new phase/gate/mode/task-type; the Phase 2 and Phase 4 approval gates are untouched. Pinned
+  `@version` tokens updated.
+
 ## [1.31.2] — 2026-08-03 — CVE-2026-47994 claimed an edition it cannot affect
 
 The last false positive from the Mage-OS audit. `CVE-2026-47994` declared both `commerce` and
