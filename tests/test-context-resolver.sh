@@ -91,4 +91,30 @@ if [ -n "$PV" ] && [ "$PV" != "null" ]; then
     fi
 fi
 
+# --- Runtime test tooling probes ---------------------------------------------
+# tools.curl and tools.headless_browser must always be PRESENT keys. Their value
+# may legitimately be null (honest gap) — absence of the key is the failure, because
+# consumers branch on `null` and a missing key is indistinguishable from "not probed".
+python3 - "$OUT" <<'PY'
+import sys, json
+d = json.loads(sys.argv[1])
+tools = d.get("tools", {})
+for key in ("curl", "headless_browser"):
+    if key not in tools:
+        print(f"FAIL: tools.{key} missing from resolver output (must be present, may be null)")
+        sys.exit(1)
+
+hb = tools.get("headless_browser")
+allowed = {None, "playwright", "puppeteer", "google-chrome", "chromium", "chromium-browser"}
+if hb not in allowed:
+    print(f"FAIL: tools.headless_browser={hb!r} not one of {sorted(str(a) for a in allowed)}")
+    sys.exit(1)
+
+curl = tools.get("curl")
+if curl not in (None, "curl"):
+    print(f"FAIL: tools.curl={curl!r} (expected \"curl\" or null)")
+    sys.exit(1)
+PY
+[ $? -eq 0 ] || exit 1
+
 exit 0

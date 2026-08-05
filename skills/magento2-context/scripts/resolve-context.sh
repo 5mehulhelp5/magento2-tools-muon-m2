@@ -782,6 +782,44 @@ probe_vendor_tool() {
     printf 'null'
 }
 
+# Headless-browser ladder: playwright → puppeteer → google-chrome → chromium → null.
+# `--no-install` is deliberate — a probe must never download a package as a side effect.
+# A missing browser is a normal, expected result (see references/runtime-test-tooling.md);
+# it is not an error and never blocks resolution.
+probe_headless_browser() {
+    # A cold `npx` resolution can stall, so guard it with `timeout` where that exists.
+    # `timeout` is absent on stock macOS — probe unguarded there rather than failing.
+    # Plain string, not an array: bash 3.2 (stock macOS) treats "${arr[@]}" on an EMPTY
+    # array as an unbound variable under `set -u`, which would abort the whole resolver.
+    local timeout_prefix=""
+    if command -v timeout >/dev/null 2>&1; then
+        timeout_prefix="timeout 15"
+    fi
+
+    if command -v npx >/dev/null 2>&1; then
+        # shellcheck disable=SC2086  # deliberate: empty prefix must expand to no argument
+        if ${timeout_prefix} npx --no-install playwright --version >/dev/null 2>&1; then
+            printf '"playwright"'
+            return
+        fi
+        # shellcheck disable=SC2086  # deliberate: empty prefix must expand to no argument
+        if ${timeout_prefix} npx --no-install puppeteer --version >/dev/null 2>&1; then
+            printf '"puppeteer"'
+            return
+        fi
+    fi
+
+    local candidate
+    for candidate in google-chrome chromium chromium-browser; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            printf '"%s"' "$candidate"
+            return
+        fi
+    done
+
+    printf 'null'
+}
+
 T_PHPCS=$(probe_vendor_tool phpcs)
 T_PHPSTAN=$(probe_vendor_tool phpstan)
 T_PHPUNIT=$(probe_vendor_tool phpunit)
@@ -797,6 +835,8 @@ T_TRUFFLEHOG=$(probe_tool trufflehog 'command -v trufflehog' "trufflehog")
 T_NODE=$(probe_tool node 'command -v node' "node")
 T_PA11Y=$(probe_tool pa11y 'command -v pa11y' "pa11y")
 T_GH=$(probe_tool gh 'command -v gh' "gh")
+T_CURL=$(probe_tool curl 'command -v curl' "curl")
+T_HEADLESS_BROWSER=$(probe_headless_browser)
 
 # --- Assemble JSON ---
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -810,7 +850,7 @@ cat > "$CACHE_TMP" <<EOF
 {
   "schemaVersion": "1.0",
   "skill": "magento2-context",
-  "skillVersion": "1.12.0",
+  "skillVersion": "1.13.0",
   "resolvedAt": "${TIMESTAMP}",
   "cacheKey": $(json_or_null "$CACHE_KEY"),
 
@@ -864,7 +904,9 @@ cat > "$CACHE_TMP" <<EOF
     "trufflehog": ${T_TRUFFLEHOG},
     "node": ${T_NODE},
     "pa11y": ${T_PA11Y},
-    "gh": ${T_GH}
+    "gh": ${T_GH},
+    "curl": ${T_CURL},
+    "headless_browser": ${T_HEADLESS_BROWSER}
   },
 
   "resolution_source": {

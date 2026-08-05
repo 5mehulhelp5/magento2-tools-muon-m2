@@ -24,6 +24,8 @@ command. If exit non-zero or command not found → record `null`.
 | `node`         | `command -v node && node --version`                                   | `"node"`                    |
 | `pa11y`        | `command -v pa11y && pa11y --version`                                 | `"pa11y"`                   |
 | `gh`           | `command -v gh && gh --version`                                       | `"gh"`                      |
+| `curl`         | `command -v curl && curl --version`                                   | `"curl"`                    |
+| `headless_browser` | `npx --no-install playwright --version` → `npx --no-install puppeteer --version` → `command -v google-chrome \|\| chromium \|\| chromium-browser` | `"playwright"` / `"puppeteer"` / `"google-chrome"` / `null` |
 
 ## Runner Awareness
 
@@ -43,6 +45,18 @@ working dir = the Magento root) for runner-backed modes, or the host path
 `{magento_root}/vendor/bin/<tool>` for bare mode. Do **not** store a runner-prefixed string —
 consumers prefix `{runner}` themselves (e.g. deploy runs `{runner} vendor/bin/phpcs`), so a
 prefixed value would double the runner.
+
+## Headless Browser Probe
+
+`headless_browser` records **which** driver is available, not just whether one is — consumers
+pick their invocation from the value. `null` is a normal, expected result: browsers are not
+assumed to exist in CI or sandboxed sessions, and every skill that would drive one has a `curl`
+tier instead. See `magento2-context/references/runtime-test-tooling.md` for the policy that
+consumes this field.
+
+The probe never launches a browser and never installs one — `npx --no-install` is deliberate, so
+a probe cannot pull a package down as a side effect. It is wrapped in `timeout 15` when `timeout`
+is available, because a cold `npx` resolution can otherwise stall the whole context resolution.
 
 ## Why Probe at All
 
