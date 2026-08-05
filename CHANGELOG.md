@@ -43,8 +43,7 @@ interrupted runs" reinforced it: if resuming is a first-class feature, interrupt
   ends in "start the next one" instead of ending in bookkeeping. And the `plan.md` preamble is
   scoped to **externally** interrupted runs: it is not a licence to interrupt the run yourself.
 
-  No new phase/gate/mode/task-type; the Phase 2 and Phase 4 approval gates are untouched. Pinned
-  `@version` tokens updated.
+  No new phase/gate/mode/task-type; the Phase 2 and Phase 4 approval gates are untouched.
 
 ## [1.31.2] — 2026-08-03 — CVE-2026-47994 claimed an edition it cannot affect
 

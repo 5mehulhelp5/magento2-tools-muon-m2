@@ -165,7 +165,8 @@ Every feature gets its own subfolder under `.docs/`. Create it at the start of P
 > Sub-skill artifacts nest by category under the feature root per
 > `magento2-context/references/artifact-layout.md`.
 
-**plan.md** is the single source of truth for resuming interrupted runs. It must always contain:
+**plan.md** is the single source of truth for resuming a run interrupted **from outside** — a lost
+session, a crash, an explicit stop by the user. It must always contain:
 
 - The implementation flow diagram (Mermaid `flowchart TD`)
 - The module schema diagram (Mermaid `graph TD`)
