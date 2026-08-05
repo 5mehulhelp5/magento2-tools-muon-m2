@@ -8,16 +8,20 @@ Cross-references:
 - Static check catalog: `references/wcag-rules.md`
 - Finding shape: `magento2-context/references/findings-schema.md`
 - Severity scale: `magento2-context/references/severity.md`
+- Runtime tooling policy: `magento2-context/references/runtime-test-tooling.md`
 
 ---
 
 ## When the Runtime Pass Runs
 
-All three conditions must be true simultaneously:
+All four conditions must be true simultaneously:
 
 1. The `--runtime` flag is passed by the user.
 2. The user provides `--url=<storefront-url>` (a live, accessible storefront URL).
 3. `pa11y` is listed as available in `{ctx.tools}` (resolved by `magento2-context`).
+4. `browser_policy` resolves to `auto` — pa11y drives a headless browser, so a `curl-only` run
+   (user directive, or `ctx.tools.headless_browser == null`) skips it. See
+   `magento2-context/references/runtime-test-tooling.md`.
 
 If **any** condition is unmet, the runtime pass is skipped entirely. A `scanner_errors`
 entry is added to the findings document explaining which condition was not met:
@@ -35,6 +39,15 @@ or
 {
   "scanner": "pa11y",
   "stderr": "runtime pass skipped — no --url provided"
+}
+```
+
+or
+
+```json
+{
+  "scanner": "pa11y",
+  "stderr": "runtime pass skipped — browser_policy=curl-only (user directive)"
 }
 ```
 

@@ -4,6 +4,11 @@ Surface-driven smoke tests run after Phase 3 (Execute). A smoke failure does NOT
 rollback (the deploy completed) but it surfaces a "needs investigation" finding in the
 report.
 
+> **Tooling.** These smokes are `curl` and `bin/magento` only, by policy — see
+> `magento2-context/references/runtime-test-tooling.md`. Deploy smoke never drives a browser:
+> it verifies reachability and error signals, not rendering, so a browser would add a
+> dependency without adding signal.
+
 ## Default Smokes (Always Run)
 
 ### Module status
@@ -114,6 +119,9 @@ Pass: 302 (redirect to login). Fail: 500 or 404.
 If the module adds an admin route, also probe its URL (expect 302 to login, not 404 or
 500).
 
+Stay with `curl` here even when a headless browser happens to be available. Confirming the admin
+*renders* is Phase 6B's job in `magento2-feature-implement`, not the deploy gate's.
+
 ### `frontend_ui`
 
 ```bash
@@ -121,6 +129,9 @@ curl -s -o /dev/null -w '%{http_code}\n' "{base_url}/{vendor_lower}_{module_lowe
 ```
 
 Pass: 200, 302, 404 (if module doesn't expose a public route). Fail: 500.
+
+Same rule as `admin_ui`: `curl` only. A 200 proves the route is wired; rendering is out of scope
+for a deploy smoke.
 
 ### `cron`
 

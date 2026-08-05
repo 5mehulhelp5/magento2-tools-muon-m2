@@ -101,14 +101,23 @@ repeatable reproduction.
 
 ## Browser Reproduction
 
-For frontend bugs not captured by curl (KO, JS), record:
+Tooling policy: `magento2-context/references/runtime-test-tooling.md`. REST, GraphQL, and
+Web-API reproductions always use `curl` (see the recipes above) — never a browser.
 
-- Browser + version
+For frontend bugs `curl` cannot capture (Knockout, JS, rendering), drive a **headless** browser
+only. Never a headed one.
+
+When `browser_policy` resolves to `curl-only` — the user said so, or
+`ctx.tools.headless_browser` is `null` — do **not** attempt a browser run. Record the manual
+reproduction recipe instead, and state in the RCA that the JS-level reproduction is unverified:
+
+- Browser + version (as reported by the user)
 - Steps (1, 2, 3...)
-- Network HAR file path (if user can share)
-- Console errors
+- Network HAR file path (if the user can share one)
+- Console errors (as reported by the user)
 
-The reproduction recipe says "open this URL, click X, expect Y, see Z."
+The reproduction recipe says "open this URL, click X, expect Y, see Z." An unverified recipe is
+an honest gap; a fabricated "reproduced" is a defect in the RCA.
 
 ## Reproduction Recipe Document
 
