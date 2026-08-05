@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — smoke tests assumed a browser was there
+## [1.32.0] — 2026-08-05 — smoke tests assumed a browser was there
 
 Phase 6B's admin and storefront suites (S3–S7) were driven by a headless browser, and when none
 was found they were **skipped**. On a CI runner or a sandboxed session — the common case — that
@@ -25,11 +25,12 @@ And a user who typed "do not use browser" was simply ignored.
   `MAGENTO2_SMOKE_NO_BROWSER=1` all force curl-only testing, in that precedence order. The
   resolved `browser_policy` is deliberately **not** cached: the context cache is keyed on
   `composer.lock`, so a prompt-scoped directive persisted there would leak into unrelated runs.
-- **`magento2-context` 1.12.0 → 1.13.0** — new `tools.curl` and `tools.headless_browser` probes
-  (Playwright → Puppeteer → `google-chrome` → `chromium`), so browser availability is resolved
-  once instead of re-derived per skill. `null` is a first-class, expected value.
+- **`magento2-context` 1.12.0 → 1.13.0** — new `tools.curl` and `tools.headless_browser` probes,
+  so browser availability is resolved once instead of re-derived per skill. `null` is a
+  first-class, expected value.
 - `tests/test-runtime-test-tooling.sh` — guards the policy's five rules, the six-row precedence
-  ladder, each consumer's pointer, and the "no longer skips S3–S7" regression.
+  ladder, each consumer's pointer, the "no longer skips S3–S7" regression, and the
+  probe/driver backend equivalence below.
 
 ### Changed
 
@@ -48,6 +49,26 @@ And a user who typed "do not use browser" was simply ignored.
   unverified, instead of fabricating a "reproduced".
 - **`magento2-accessibility-audit` 1.1.0 → 1.1.1** — the opt-in pa11y runtime pass gains a fourth
   precondition: `browser_policy` must be `auto`.
+
+### Fixed
+
+- **A bare Chrome binary is no longer mistaken for a browser backend.** `smoke-browser.mjs` can
+  drive only Playwright or Puppeteer — its raw-CDP rung was deleted in an earlier release because
+  it fake-passed every suite — but both `smoke-runner.md` ("`google-chrome` is the
+  lowest-common-denominator fallback") and the driver's own header comment still advertised that
+  rung, and a dead `kind: "cdp"` branch made the code read as though a Chrome binary sufficed. A
+  machine with Chrome but no Playwright/Puppeteer would resolve `browser_policy` to `auto`,
+  suppress the mandatory degraded-coverage finding, and run the curl tier while the report claimed
+  full coverage. `tools.headless_browser` now reports `playwright`, `puppeteer`, or `null` and
+  nothing else, the dead branch is gone, and the stale docs are corrected.
+- **The probe now mirrors the driver exactly.** `smoke-browser.mjs` requires both that
+  `npx <tool> --version` succeeds *and* that the module is importable. A globally-resolvable
+  `playwright` CLI with no importable module — what an MCP server install leaves behind — was
+  reported as an available backend the driver then refused at exit `78`. The probe checks both.
+- **The degraded-coverage finding is gated on the curl tier having run**, not on
+  `browser_policy == curl-only`. If the policy resolves to `auto` but the driver exits `78`
+  anyway, the finding is still mandatory, so a probe that errs optimistically cannot buy back a
+  full-coverage claim.
 
 ## [1.31.3] — 2026-08-04 — feature-implement stopped between tasks and waited to be told to continue
 
