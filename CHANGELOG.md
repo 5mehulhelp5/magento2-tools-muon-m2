@@ -6,7 +6,7 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — the REST surface was described only in prose
+## [1.33.0] — 2026-08-21 — the REST surface was described only in prose
 
 A module with `etc/webapi.xml` got exactly one API artifact out of `magento2-docs-generate`:
 `docs/api-reference.md` — prose, for humans. There was nothing a machine could read, so an

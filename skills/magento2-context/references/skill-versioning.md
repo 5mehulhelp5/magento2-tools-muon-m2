@@ -34,7 +34,7 @@ skills evolve.
 | magento2-cli-command       | 1.1.2   | New mode/template, command or cron pattern change                             |
 | magento2-message-queue     | 1.1.3   | New connection type/template, topic or consumer pattern change                |
 | magento2-static-analysis   | 1.4.0   | New tool/rule, autofix-safety or severity calibration change                  |
-| magento2-docs-generate     | 1.3.1   | New docs (developer/user guide, REST+GraphQL reference), example/diagram derivation |
+| magento2-docs-generate     | 1.4.0   | New docs (developer/user guide, REST+GraphQL reference), new output format (OpenAPI/.http/Postman), example/diagram derivation, secret-gate rules |
 | magento2-indexer           | 1.1.2   | New indexer/mview pattern, dimension support                                  |
 | magento2-marketplace-prep  | 1.1.0   | New EQP check, readiness-scoring calibration                                  |
 | magento2-accessibility-audit | 1.1.1 | New WCAG rule, runtime pass change                                            |
@@ -43,8 +43,22 @@ skills evolve.
 | magento2-breeze-compat-audit | 1.1.0 | New check/pattern, severity calibration change                                |
 | magento2-audit             | 1.0.0   | New dimension added, consolidation/dedup or verdict rule change                |
 
-## Changelog (last update: 2026-08-14)
+## Changelog (last update: 2026-08-21)
 
+- **`magento2-docs-generate` 1.3.1 → 1.4.0 — machine-readable API description artifacts.**
+  A module with `etc/webapi.xml` produced exactly one API artifact: `docs/api-reference.md`,
+  prose for humans. Nothing described the surface to a machine, so an integrator could not
+  import it into a client, a mock server, or a contract test — and Magento's own
+  `GET /rest/<store>/schema` is no substitute (Swagger 2.0, needs a running authenticated
+  instance, and one bare `array` annotation anywhere in a reachable type graph takes it down
+  store-wide with HTTP 500). The skill already extracted everything needed; it just rendered
+  it only as Markdown. It now also emits `docs/api/openapi.yaml` (OpenAPI 3.1), a JetBrains
+  `{slug}.http` plus a secret-free `http-client.env.json`, and a Postman v2.1 collection +
+  environment, all from the same extraction and with no live-instance dependency.
+  Minor bump: additive output formats, no phase or gate removed. The Core Rule changed from
+  *Markdown only* to *Never modifies source*, since YAML/JSON/.http are now written — the
+  blast radius is still bounded to `{module}/docs/`, and Phase 4 grew a nine-assertion
+  secret/privacy gate to match.
 - **HTML guides must declare their encoding.** The developer and user guides are written as UTF-8
   and read over `file://`, where there is no HTTP `Content-Type` header — so without a
   `<meta charset="utf-8">` a browser sniffs windows-1252 and every multi-byte character breaks

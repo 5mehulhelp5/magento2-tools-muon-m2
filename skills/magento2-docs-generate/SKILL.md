@@ -241,7 +241,7 @@ Write a run report to
   `docs/api/http-client.private.env.json` to the module `.gitignore` before committing.*
   The JetBrains HTTP Client writes your bearer token there and it sits beside the `.http`
   file, not inside `.idea/`, so a stock `.gitignore` does not cover it.
-- Skill version: `magento2-docs-generate@1.3.1`.
+- Skill version: `magento2-docs-generate@1.4.0`.
 
 ## Inputs
 
