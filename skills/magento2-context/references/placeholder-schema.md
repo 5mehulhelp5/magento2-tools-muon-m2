@@ -182,6 +182,25 @@ guide, user guide, and REST/GraphQL references):
 fully-rendered Markdown section composed by the model from the surface JSON, or empty
 when its surface has no entries.
 
+`magento2-docs-generate` API description-artifact markers. Unlike every other token
+here these are substituted by a **script**
+(`magento2-docs-generate/scripts/emit-api-artifacts.sh`), not composed by the model —
+the artifacts must be byte-identical across runs, which prose cannot guarantee. They
+are filled only for a module whose `rest_routes` surface is non-empty.
+
+| Token | Fills | Template |
+|-------|-------|----------|
+| `{OPENAPI_INFO}` | `info` block — title, version (omitted when `composer.json` has none), description | `templates/openapi.yaml` |
+| `{OPENAPI_SERVERS}` | templated `servers` block — `https://{host}/rest/{store}`, never a concrete host | `templates/openapi.yaml` |
+| `{OPENAPI_PATHS}` | every path item, one per `url_template` | `templates/openapi.yaml` |
+| `{OPENAPI_COMPONENTS}` | `schemas`, `parameters`, `securitySchemes`, and the shared `Error` envelope | `templates/openapi.yaml` |
+| `{HTTP_CLIENT_REQUESTS}` | the `###`-separated request blocks, in `webapi.xml` order | `templates/http-client.http` |
+| `{HTTP_CLIENT_ENV}` | the public env JSON body — secret-named variables ship empty | `templates/http-client.env.json` |
+| `{POSTMAN_INFO}` | collection `info`, with a deterministic UUIDv5 `_postman_id` | `templates/postman-collection.json` |
+| `{POSTMAN_ITEMS}` | folders and requests | `templates/postman-collection.json` |
+| `{POSTMAN_ENV_VALUES}` | the environment `values` array | `templates/postman-environment.json` |
+| `{API_SLUG}` | the URL-derived slug that names the `.http` and Postman files | `templates/http-client.http` |
+
 ## Substitution rules
 
 - Substitution is whole-token: replace the literal text `{ModuleName}` with the resolved
@@ -201,6 +220,7 @@ The machine-readable allow-list. `test-placeholder-tokens.sh` parses the fenced 
 ActionName
 API_REF_ENDPOINTS
 API_REF_INTRO
+API_SLUG
 API_SURFACE_TABLE
 Area
 AttributeCode
@@ -267,6 +287,8 @@ GRAPHQL_REF_OPERATIONS
 GRAPHQL_TABLE
 GroupId
 HIGH_COUNT
+HTTP_CLIENT_ENV
+HTTP_CLIENT_REQUESTS
 ID
 IndexerName
 Interface
@@ -290,10 +312,17 @@ N
 NNN
 NEXT_STEPS
 Name
+OPENAPI_COMPONENTS
+OPENAPI_INFO
+OPENAPI_PATHS
+OPENAPI_SERVERS
 ObserverName
 OtherPatch
 PARALLEL_REVIEW_SECTION
 POSITIVE_OBSERVATIONS
+POSTMAN_ENV_VALUES
+POSTMAN_INFO
+POSTMAN_ITEMS
 PLACEHOLDER
 ParentIdAccessor
 ParentTheme

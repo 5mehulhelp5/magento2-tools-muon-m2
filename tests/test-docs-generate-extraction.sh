@@ -26,7 +26,7 @@ def need(cond, msg):
 # existing-key regression guard
 for k in ("api","events_observed","plugins","rest_routes","graphql","db_schema"):
     need(k in s, f"missing existing key {k}")
-need(len(s["rest_routes"]) == 4, "expected 4 REST routes")
+need(len(s["rest_routes"]) == 6, "expected 6 REST routes")
 need("api_methods" in s, "missing api_methods key")
 ams = [m for m in s["api_methods"] if m["method"] == "getById"]
 need(ams, "getById not extracted as an api method")
@@ -69,5 +69,41 @@ need(isinstance(up.get("request_shape"), dict),
 um = [m for m in s["api_methods"] if m["method"] == "upsert"]
 need(um and "|" in um[0]["return_type"],
      "api_methods must capture the full union return type verbatim")
+# --- API description artifacts: route metadata the spec formats need ---
+need(g["url_template"] == "/V1/acme-sample/{id}", ":param not rewritten to {param}")
+need(g["path_params"] == [{"name": "id", "type": "integer"}],
+     "path param not typed from the service-method signature")
+need(g["auth_kind"] == "acl" and g["acl_resources"] == ["Acme_Sample::view"],
+     "ACL route not classified")
+me = [r for r in s["rest_routes"] if r["service_method"] == "getForCurrentCustomer"][0]
+need(me["auth_kind"] == "self" and me["acl_resources"] == [], "self route not classified")
+need(ext[0]["auth_kind"] == "anonymous", "anonymous route not classified")
+need(g["response_schema"]["type"] == "object", "response_schema not an object node")
+need(g["response_schema"]["title"] == "Sample", "DTO schema carries no component title")
+need(g["response_schema"]["properties"]["entity_id"] == {"type": "integer"},
+     "int getter not typed as integer in the schema walk")
+need(g["response_schema"]["properties"]["store"] == {"type": "string"},
+     "out-of-module getter type should degrade to {type: string}")
+need(p["request_schema"]["title"] == "Sample", "request_schema not built from the DTO param")
+up2 = [r for r in s["rest_routes"] if r["service_method"] == "upsert"][0]
+need(up2["response_schema"].get("nullable") is True,
+     "union with null must mark the schema nullable")
+gl = [r for r in s["rest_routes"] if r["service_method"] == "getList"][0]
+need(gl["is_search_criteria"] is True, "SearchCriteria param not flagged")
+need(gl["request_schema"] is None and gl["request_shape"] is None,
+     "a SearchCriteria route must not carry a request body")
+need(gl["response_schema"]["properties"]["items"]["type"] == "array",
+     "`array` + `@return Foo[]` docblock must resolve to a typed array")
+need(gl["response_schema"]["properties"]["items"]["items"]["title"] == "Sample",
+     "collection element type lost")
+# --- bare `array` preflight (spec section 8) ---
+need("rest_warnings" in s, "missing rest_warnings key")
+bare = [w for w in s["rest_warnings"] if w["annotation"] == "@param array $context"]
+need(bare, "bare `array` annotation not reported")
+need(bare[0]["file"] == "Api/Data/SampleInterface.php" and bare[0]["line"] > 0,
+     "bare-array warning must name file and line")
+need("TypeProcessor" in bare[0]["message"], "bare-array warning lacks the failure explanation")
+need(not [w for w in s["rest_warnings"] if "getItems" in w["annotation"]],
+     "`array` typed by a `@return Foo[]` docblock must NOT warn")
 print("PASS")
 PY

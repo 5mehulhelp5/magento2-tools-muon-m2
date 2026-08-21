@@ -361,12 +361,44 @@ SCALAR_EXAMPLE = {
     'array': [], 'iterable': [],
 }
 
+# JSON Schema counterpart of SCALAR_EXAMPLE. `array`/`mixed` deliberately map to the
+# empty schema {} — "anything" — and are reported by scan_bare_types() instead.
+SCALAR_SCHEMA = {
+    'string': {'type': 'string'}, 'int': {'type': 'integer'},
+    'integer': {'type': 'integer'}, 'float': {'type': 'number'},
+    'bool': {'type': 'boolean'}, 'boolean': {'type': 'boolean'},
+    'array': {}, 'iterable': {}, 'mixed': {},
+}
+
+# PHP scalar -> OpenAPI primitive, for path-parameter typing.
+PHP_TO_OPENAPI = {
+    'int': 'integer', 'integer': 'integer', 'float': 'number', 'double': 'number',
+    'bool': 'boolean', 'boolean': 'boolean', 'string': 'string',
+}
+
+BARE_TYPE_MESSAGE = (
+    'Bare `array`/`mixed` breaks Magento\'s own schema generator '
+    '(Magento\\Framework\\Reflection\\TypeProcessor). While present, '
+    'GET /rest/<store>/schema returns HTTP 500 for EVERY service on the '
+    'installation, not just this module. Use a typed array (`string[]`, `mixed[]`) '
+    'or a DTO interface.'
+)
+
 def _first_concrete_type(rtype):
     """Reduce a PHP union type to its first concrete (non-null) member, e.g.
-    'SampleInterface|null' -> 'SampleInterface', 'string|int' -> 'string'."""
-    parts = [p.strip() for p in rtype.split('|')]
+    'SampleInterface|null' -> 'SampleInterface', 'string|int' -> 'string'.
+    A leading nullable marker is stripped ('?Foo' -> 'Foo'); ask _is_nullable()
+    for that bit instead."""
+    parts = [p.strip().lstrip('?') for p in rtype.split('|')]
     parts = [p for p in parts if p and p.lower().lstrip('\\') not in ('null', 'void', 'mixed')]
-    return parts[0] if parts else rtype
+    return parts[0] if parts else rtype.strip().lstrip('?')
+
+def _is_nullable(rtype):
+    """True for '?Foo' and for any union carrying an explicit `null` member."""
+    rtype = rtype.strip()
+    if rtype.startswith('?'):
+        return True
+    return any(p.strip().lstrip('\\').lower() == 'null' for p in rtype.split('|'))
 
 def _ns_to_path(base, fqcn):
     """Map Vendor\\Module\\Sub\\Class -> {base}/Sub/Class.php (module-local only)."""
@@ -408,8 +440,58 @@ def _resolve_type(name, use_map, current_ns):
     return name
 
 GETTER_RE = re.compile(
-    r'public\s+function\s+((?:get|is|has)[A-Z]\w*)\s*\([^)]*\)\s*:\s*\??([\\\w\[\]\|]+)'
+    r'public\s+function\s+((?:get|is|has)[A-Z]\w*)\s*\([^)]*\)\s*:\s*(\??[\\\w\[\]\|]+)'
 )
+
+DOCBLOCK_RE = re.compile(r'/\*\*(.*?)\*/', re.S)
+# Only whitespace and method modifiers may sit between a docblock and the member
+# it documents; anything else means the docblock belongs to an earlier member.
+DOC_GAP_RE = re.compile(r'^(?:\s|public|protected|private|static|final|abstract)*$')
+
+def _docblock_before(text, pos):
+    """Inner text of the docblock immediately preceding `pos`, or ''."""
+    doc = ''
+    for d in DOCBLOCK_RE.finditer(text):
+        if d.end() > pos:
+            break
+        if DOC_GAP_RE.match(text[d.end():pos]):
+            doc = d.group(1)
+    return doc
+
+def _doc_return_type(doc):
+    m = re.search(r'@return\s+([^\s*]+)', doc or '')
+    return m.group(1) if m else ''
+
+def _doc_param_type(doc, name):
+    m = re.search(r'@param\s+([^\s*]+)\s+\$' + re.escape(name) + r'\b', doc or '')
+    return m.group(1) if m else ''
+
+def _normalize_doc_array(t):
+    """`array<int, Foo>` / `array<Foo>` -> `Foo[]`; anything else unchanged."""
+    m = re.match(r'^array<\s*[^,>]+\s*,\s*([^>]+)>$', t)
+    if m:
+        return m.group(1).strip() + '[]'
+    m = re.match(r'^array<\s*([^,>]+)\s*>$', t)
+    if m:
+        return m.group(1).strip() + '[]'
+    return t
+
+def _effective_type(text, pos, native, param_name=None):
+    """Magento types collections as a native `array` hint plus a `@return Foo[]`
+    docblock — the canonical SearchResults shape. When the native hint is bare,
+    prefer the docblock annotation so the collection element type survives."""
+    concrete = _first_concrete_type(native or '')
+    if concrete.lstrip('\\').split('\\')[-1].lower() not in ('array', 'iterable', 'mixed'):
+        return native
+    doc = _docblock_before(text, pos)
+    annotated = (_doc_param_type(doc, param_name) if param_name
+                 else _doc_return_type(doc))
+    annotated = _normalize_doc_array(annotated.strip()) if annotated else ''
+    if not annotated:
+        return native
+    if annotated.lstrip('\\').split('\\')[-1].lower() in ('array', 'iterable', 'mixed'):
+        return native
+    return annotated
 
 def _type_to_example(base, rtype, depth, seen, use_map=None, cur_ns=''):
     use_map = use_map or {}
@@ -443,15 +525,180 @@ def walk_dto_shape(base, fqcn, depth=0, seen=None):
     cur_ns = _current_namespace(text)
     shape = {}
     for m in GETTER_RE.finditer(text):
+        rtype = _effective_type(text, m.start(), m.group(2))
         shape[_getter_to_field(m.group(1))] = _type_to_example(
-            base, m.group(2), depth, seen, use_map, cur_ns)
+            base, rtype, depth, seen, use_map, cur_ns)
     return shape
 
+def _schema_title(fqcn):
+    """Component name for a DTO: its short name minus a trailing `Interface`."""
+    short = fqcn.lstrip('\\').split('\\')[-1]
+    trimmed = short[:-len('Interface')] if short.endswith('Interface') else short
+    return trimmed or short
+
+def _type_to_schema(base, rtype, depth, seen, use_map=None, cur_ns=''):
+    """JSON Schema counterpart of _type_to_example(): same module-local resolution,
+    same depth cap and cycle guard, but emits type nodes instead of placeholder
+    values. Returns None only for `void`."""
+    use_map = use_map or {}
+    nullable = _is_nullable(rtype)
+    concrete = _first_concrete_type(rtype)
+    is_array = concrete.endswith('[]')
+    core = (concrete[:-2] if is_array else concrete).lstrip('\\')
+    short = core.split('\\')[-1].lower()
+    if short == 'void':
+        return None
+    if short in SCALAR_SCHEMA:
+        node = dict(SCALAR_SCHEMA[short])
+    else:
+        fqcn = _resolve_type(core, use_map, cur_ns)
+        nested = walk_dto_schema(base, fqcn, depth + 1, seen)
+        # Same degradation the example walker applies to non-module-local types.
+        node = nested if nested is not None else {'type': 'string'}
+    if is_array:
+        node = {'type': 'array', 'items': node}
+    if nullable:
+        node = dict(node)
+        node['nullable'] = True
+    return node
+
+def walk_dto_schema(base, fqcn, depth=0, seen=None):
+    """Object schema for a module-local DTO interface: one property per get*/is*/has*
+    getter, snake_cased. `title` carries the component name so the emitter can hoist
+    the node into components/schemas and $ref it."""
+    if seen is None:
+        seen = set()
+    if depth > 4 or fqcn in seen:
+        return {}
+    seen = seen | {fqcn}
+    fpath = _ns_to_path(base, fqcn)
+    if not fpath:
+        return None  # unresolved -> caller degrades to {"type": "string"}
+    try:
+        with open(fpath, encoding='utf-8', errors='replace') as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    use_map = _parse_use_map(text)
+    cur_ns = _current_namespace(text)
+    props = {}
+    for m in GETTER_RE.finditer(text):
+        rtype = _effective_type(text, m.start(), m.group(2))
+        node = _type_to_schema(base, rtype, depth, seen, use_map, cur_ns)
+        props[_getter_to_field(m.group(1))] = {} if node is None else node
+    return {'type': 'object', 'title': _schema_title(fqcn), 'properties': props}
+
+# ---------------------------------------------------------------------------
+# 9b. Bare `array` / `mixed` preflight over the reachable Api/ graph
+# ---------------------------------------------------------------------------
+FUNC_SIG_RE = re.compile(
+    r'function\s+(\w+)\s*\(([^)]*)\)\s*(?::\s*(\??[\\\w\[\]\|]+))?'
+)
+PARAM_RE = re.compile(r'(\??[\\\w\[\]\|]+)\s+\$(\w+)')
+# `array<int, Foo>`, `array{a: int}`, `mixed[]` and `arrayish` are all typed enough
+# for TypeProcessor; only a truly bare `array`/`mixed` is rejected.
+DOC_BARE_RE = re.compile(r'@(param|return)\s+(array|mixed)(?![\w<{\[])([^\r\n]*)')
+
+def _is_bare(phptype):
+    if phptype is None:
+        return False
+    concrete = _first_concrete_type(phptype)
+    if concrete.endswith('[]'):
+        return False
+    return concrete.lstrip('\\').split('\\')[-1].lower() in ('array', 'mixed')
+
+def _local_types_in(base, text, use_map, cur_ns):
+    """Module-local FQCNs referenced by this file's method signatures."""
+    out = set()
+    for m in FUNC_SIG_RE.finditer(text):
+        candidates = [pm.group(1) for pm in PARAM_RE.finditer(m.group(2) or '')]
+        if m.group(3):
+            candidates.append(m.group(3))
+        for t in candidates:
+            concrete = _first_concrete_type(t)
+            core = (concrete[:-2] if concrete.endswith('[]') else concrete).lstrip('\\')
+            short = core.split('\\')[-1].lower()
+            if short in SCALAR_SCHEMA or short in ('void', 'self', 'static', 'this', 'null'):
+                continue
+            fqcn = _resolve_type(core, use_map, cur_ns)
+            if _ns_to_path(base, fqcn):
+                out.add(fqcn)
+    return out
+
+def scan_bare_types(base, routes):
+    """Breadth-first over the module-local interface graph reachable from every
+    route's service class, reporting each bare `array`/`mixed` in a docblock
+    annotation or a native type hint. Warning, never a hard stop."""
+    warnings = []
+    seen_types = set()
+    seen_files = set()
+    queue = [r.get('service_class', '') for r in routes if r.get('service_class')]
+    while queue:
+        fqcn = queue.pop(0)
+        if not fqcn or fqcn in seen_types:
+            continue
+        seen_types.add(fqcn)
+        fpath = _ns_to_path(base, fqcn)
+        if not fpath:
+            continue
+        try:
+            with open(fpath, encoding='utf-8', errors='replace') as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        use_map = _parse_use_map(text)
+        cur_ns = _current_namespace(text)
+        for t in sorted(_local_types_in(base, text, use_map, cur_ns)):
+            if t not in seen_types:
+                queue.append(t)
+        rpath = rel(fpath)
+        if rpath in seen_files:
+            continue
+        seen_files.add(rpath)
+        hits = []
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            dm = DOC_BARE_RE.search(line)
+            if dm:
+                tail = (dm.group(3) or '').rstrip()
+                var = re.search(r'\$(\w+)', tail)
+                hits.append((lineno,
+                             ('@%s %s%s' % (dm.group(1), dm.group(2), tail)).strip(),
+                             var.group(1) if var else ''))
+        for m in FUNC_SIG_RE.finditer(text):
+            lineno = text[:m.start()].count('\n') + 1
+            name = m.group(1)
+            doc = _docblock_before(text, m.start())
+            # A bare native hint is fine when the docblock types it (`array` +
+            # `@return Foo[]` is Magento's own SearchResults idiom); it is only
+            # unrepresentable when nothing types it at all.
+            for pm in PARAM_RE.finditer(m.group(2) or ''):
+                if _is_bare(pm.group(1)) and not _doc_param_type(doc, pm.group(2)):
+                    hits.append((lineno, '%s(%s $%s)' % (name, pm.group(1), pm.group(2)),
+                                 pm.group(2)))
+            if _is_bare(m.group(3)) and not _doc_return_type(doc):
+                hits.append((lineno, '%s(): %s' % (name, m.group(3)), name))
+        for lineno, annotation, symbol in hits:
+            warnings.append({
+                'kind': 'bare_type',
+                'file': rpath,
+                'line': lineno,
+                'symbol': symbol or '',
+                'annotation': annotation,
+                'message': BARE_TYPE_MESSAGE,
+            })
+    deduped = {}
+    for w in warnings:
+        deduped[(w['file'], w['line'], w['annotation'])] = w
+    return [deduped[k] for k in sorted(deduped)]
+
 def enrich_rest_examples(base, routes):
-    sig_tmpl = r'public\s+function\s+{m}\s*\(([^)]*)\)\s*:\s*\??([\\\w\[\]\|]+)'
+    sig_tmpl = r'public\s+function\s+{m}\s*\(([^)]*)\)\s*:\s*(\??[\\\w\[\]\|]+)'
     for r in routes:
         r['request_shape'] = None
         r['response_shape'] = None
+        r['request_schema'] = None
+        r['response_schema'] = None
+        r['request_param'] = None
         r['throws'] = []
         fpath = _ns_to_path(base, r.get('service_class', ''))
         meth = r.get('service_method', '')
@@ -467,19 +714,38 @@ def enrich_rest_examples(base, routes):
         sig = re.search(sig_tmpl.replace('{m}', re.escape(meth)), text)
         if not sig:
             continue
+        param_types = {}
         for p in sig.group(1).split(','):
-            pm = re.search(r'([\\\w\[\]\|]+)\s+\$\w+', p.strip())
-            if pm:
-                ex = _type_to_example(base, pm.group(1), 0, set(), use_map, cur_ns)
+            pm = re.search(r'(\??[\\\w\[\]\|]+)\s+\$(\w+)', p.strip())
+            if not pm:
+                continue
+            ptype, pname = pm.group(1), pm.group(2)
+            param_types[pname] = ptype
+            concrete = _first_concrete_type(ptype)
+            core = (concrete[:-2] if concrete.endswith('[]') else concrete).lstrip('\\')
+            # Detect by resolved FQCN, not by method name: `getList` is a convention.
+            if _resolve_type(core, use_map, cur_ns).endswith('\\Api\\SearchCriteriaInterface'):
+                r['is_search_criteria'] = True
+            if r['request_shape'] is None:
+                ex = _type_to_example(base, ptype, 0, set(), use_map, cur_ns)
                 if isinstance(ex, dict):
                     r['request_shape'] = ex
-                    break
-        r['response_shape'] = _type_to_example(base, sig.group(2), 0, set(), use_map, cur_ns)
-        doc = None
-        for d in re.finditer(r'/\*\*(.*?)\*/', text, re.S):
-            if d.end() <= sig.start() and text[d.end():sig.start()].strip() == '':
-                doc = d
-        throws_text = doc.group(1) if doc else ''
+                    r['request_schema'] = _type_to_schema(
+                        base, ptype, 0, set(), use_map, cur_ns)
+                    # Magento's ServiceInputProcessor keys the request body by the
+                    # service-method parameter name: {"sample": {...}}, never a bare DTO.
+                    r['request_param'] = pname
+        for pp in r.get('path_params', []):
+            ptype = param_types.get(pp['name'])
+            if not ptype:
+                continue
+            concrete = _first_concrete_type(ptype)
+            core = (concrete[:-2] if concrete.endswith('[]') else concrete).lstrip('\\')
+            pp['type'] = PHP_TO_OPENAPI.get(core.split('\\')[-1].lower(), 'string')
+        ret = _effective_type(text, sig.start(), sig.group(2))
+        r['response_shape'] = _type_to_example(base, ret, 0, set(), use_map, cur_ns)
+        r['response_schema'] = _type_to_schema(base, ret, 0, set(), use_map, cur_ns)
+        throws_text = _docblock_before(text, sig.start())
         r['throws'] = sorted({_resolve_type(t, use_map, cur_ns)
                               for t in re.findall(r'@throws\s+\\?([\\\w]+)', throws_text)})
     return routes
@@ -499,12 +765,29 @@ def extract_rest_routes(base):
         if resources_el is not None:
             for res_el in resources_el.findall('resource'):
                 auth_scopes.append(res_el.get('ref', ''))
+        url = route_el.get('url', '')
+        # `:param` is Magento's path-parameter syntax; OpenAPI/Postman want `{param}`.
+        param_names = re.findall(r':(\w+)', url)
+        acl_resources = [a for a in auth_scopes if a not in ('anonymous', 'self')]
+        if 'anonymous' in auth_scopes:
+            auth_kind = 'anonymous'
+        elif acl_resources:
+            auth_kind = 'acl'
+        elif 'self' in auth_scopes:
+            auth_kind = 'self'
+        else:
+            auth_kind = 'acl'
         entries.append({
             'method': route_el.get('method', ''),
-            'url': route_el.get('url', ''),
+            'url': url,
+            'url_template': re.sub(r':(\w+)', r'{\1}', url),
+            'path_params': [{'name': n, 'type': 'string'} for n in param_names],
             'service_class': service_el.get('class', '') if service_el is not None else '',
             'service_method': service_el.get('method', '') if service_el is not None else '',
             'auth': ', '.join(auth_scopes),
+            'auth_kind': auth_kind,
+            'acl_resources': acl_resources,
+            'is_search_criteria': False,
             'file': rel(fpath),
         })
     return entries
@@ -757,6 +1040,7 @@ def extract_user_surface(base):
 plugins, preferences = extract_plugins_preferences(module_path)
 _rest = extract_rest_routes(module_path)
 enrich_rest_examples(module_path, _rest)
+_rest_warnings = scan_bare_types(module_path, _rest)
 
 surface = {
     'module_path': module_path,
@@ -771,6 +1055,7 @@ surface = {
         'config_paths': extract_config_paths(module_path),
         'cron_jobs': extract_cron_jobs(module_path),
         'rest_routes': _rest,
+        'rest_warnings': _rest_warnings,
         'graphql': extract_graphql(module_path),
         'graphql_operations': extract_graphql_operations(module_path),
         'db_schema': extract_db_schema(module_path),

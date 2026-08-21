@@ -589,33 +589,52 @@ the ActionInterface name-clash resolution. Use for "add a custom index". Dimensi
 Generate or refresh a module's **technical documentation** from its own code — public
 `@api` surface, events fired and observed, plugins, preferences, admin config paths, CLI
 commands, cron jobs, REST routes, GraphQL types, DB schema, and module dependencies.
-Read-only: extracts facts from real files, writes Markdown only. Produces up to seven
-documents inside the module — a `README.md`, `docs/technical-reference.md`,
-`docs/developer-guide.md`, conditional `docs/user-guide.md` (when an admin/storefront
-surface exists), conditional `docs/api-reference.md` (when REST routes exist), conditional
-`docs/graphql-reference.md` (when GraphQL operations exist), and a `CHANGELOG.md` scaffold
-— plus a run report under `.docs/docs-generated/`. Illustrative JSON examples are derived
-from real DTO/GraphQL field types and captioned accordingly. Mermaid diagrams are generated
-only from extracted facts. Screenshot paths are listed in an appendix; no image embeds are
-written. Every table entry cites its source file path.
+Never modifies source: it extracts facts from real files and writes only under
+`{module}/docs/`, `{module}/README.md`, `{module}/CHANGELOG.md` and the run-report root.
+Produces up to seven documents inside the module — a `README.md`,
+`docs/technical-reference.md`, `docs/developer-guide.md`, conditional `docs/user-guide.md`
+(when an admin/storefront surface exists), conditional `docs/api-reference.md` (when REST
+routes exist), conditional `docs/graphql-reference.md` (when GraphQL operations exist), and
+a `CHANGELOG.md` scaffold — plus a run report under `.docs/docs-generated/`. Illustrative
+JSON examples are derived from real DTO/GraphQL field types and captioned accordingly.
+Mermaid diagrams are generated only from extracted facts. Screenshot paths are listed in an
+appendix; no image embeds are written. Every table entry cites its source file path.
+
+For a module with a non-empty REST surface it additionally emits **machine-readable API
+description artifacts** under `{module}/docs/api/` — `openapi.yaml` (OpenAPI 3.1),
+`{slug}.http` for the JetBrains HTTP Client plus a secret-free `http-client.env.json`, and a
+Postman v2.1 collection + environment. These come from the same static extraction: no
+running instance, no network, no credentials, and byte-identical across runs so they are
+reviewable in a PR. A blocking nine-assertion secret/privacy gate withholds any artifact
+that would carry a credential, a personal identifier, or a concrete hostname, and the
+private JetBrains token file is never generated. Output nests under `docs/api/` and never
+`{module}/api/`, which on a case-insensitive filesystem is the module's own `Api/`.
 
 - **Invocation:** *"document this module"*; *"generate module docs for Acme_OrderExport"*;
-  `--module=Acme_OrderExport`; `--docs=readme,technical-reference,developer-guide,user-guide,api-reference,graphql-reference,changelog`
+  `--module=Acme_OrderExport`; `--docs=readme,technical-reference,developer-guide,user-guide,api-reference,graphql-reference,changelog,openapi,http-client,postman`
   (default: every applicable doc; conditional docs are omitted automatically when their
-  surface is absent).
+  surface is absent). Because the default is "every applicable doc", a module with REST
+  routes now produces the three API description artifacts too — re-running the skill on an
+  already-documented module will show new untracked files under `docs/api/`.
 - **Phases:** resolve context (hard-stop if module absent) → scope (which module, which
   docs) → extract surface via `scripts/extract-surface.sh` + present doc plan with
   api_methods/GraphQL-ops/user-surface counts and which conditional docs will be
-  produced or omitted (gate) → render templates → verify (no unsubstituted tokens, no
-  empty tables, no `![]` embeds, example captions present, Mermaid balanced, Markdown
-  only) → report to `.docs/docs-generated/`.
+  produced or omitted, plus any bare-`array` preflight warnings (gate) → render templates
+  and run `scripts/emit-api-artifacts.sh` → verify (no unsubstituted tokens, no empty
+  tables, no `![]` embeds, example captions present, Mermaid balanced, YAML/JSON parse, no
+  source file touched, nine-assertion secret gate) → report to `.docs/docs-generated/`.
 - **Outputs:** `{module}/README.md`, `{module}/docs/technical-reference.md`,
   `{module}/docs/developer-guide.md`, `{module}/docs/user-guide.md` (conditional),
   `{module}/docs/api-reference.md` (conditional), `{module}/docs/graphql-reference.md`
-  (conditional), `{module}/CHANGELOG.md` (scaffold);
-  `.docs/docs-generated/{Vendor}_{Module}-{date}.md`.
+  (conditional), `{module}/CHANGELOG.md` (scaffold); `{module}/docs/api/openapi.yaml`,
+  `{module}/docs/api/{slug}.http`, `{module}/docs/api/http-client.env.json`,
+  `{module}/docs/api/postman/{slug}.postman_{collection,environment}.json` (all conditional
+  on REST routes); `.docs/docs-generated/{Vendor}_{Module}-{date}.md`.
 - **Related:** `magento2-module-review` for architecture/quality review (findings, not docs);
-  `magento2-release` to consume `CHANGELOG.md` after docs are in place.
+  `magento2-release` to consume `CHANGELOG.md` after docs are in place;
+  `magento2-test-generate` for the `webapi.xml` ↔ `openapi.yaml` parity test (a `.php` file,
+  which this skill may not write); `magento2-static-analysis` to fix the bare `array`
+  annotations this skill only warns about.
 
 ---
 

@@ -6,6 +6,88 @@ individual skill versions are tracked in
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — the REST surface was described only in prose
+
+A module with `etc/webapi.xml` got exactly one API artifact out of `magento2-docs-generate`:
+`docs/api-reference.md` — prose, for humans. There was nothing a machine could read, so an
+integrator could not import the surface into a client, stand up a mock server, or write a
+contract test against it. Magento's own generated description is not a substitute: it is
+Swagger 2.0 (no `oneOf`, no meaningful `securitySchemes`, no error model), it needs a running
+and authenticated instance so it can neither ship inside the module nor run in the published
+module's CI, and it is fragile — a single bare `array` type hint anywhere in a reachable type
+graph makes `Magento\Framework\Reflection\TypeProcessor` refuse, and `GET /rest/<store>/schema`
+then returns HTTP 500 for *every* service on the installation, not just the offending module.
+
+The skill was already extracting everything needed. It just rendered it only as Markdown.
+
+### Added
+
+- **`magento2-docs-generate` (1.3.1 → 1.4.0) — machine-readable API description artifacts.**
+  For a module with a non-empty REST surface, the skill now also writes, under
+  `{module}/docs/api/`: `openapi.yaml` (OpenAPI 3.1), `{slug}.http` for the JetBrains HTTP
+  Client plus a public `http-client.env.json`, and `postman/{slug}.postman_collection.json` +
+  `postman/{slug}.postman_environment.json` (Collection v2.1). All are generated from the same
+  static extraction — **no running instance, no network, no credentials**. The new
+  `scripts/emit-api-artifacts.sh` owns the rendering rather than the model, because the output
+  has to be **byte-identical across runs** to be reviewable in a PR; the Postman collection id
+  is a UUIDv5 derived from `{Vendor}_{Module}` for the same reason.
+- **Richer REST extraction** in `scripts/extract-surface.sh`, feeding the above:
+  `url_template` (`:id` → `{id}`), typed `path_params`, `auth_kind` + `acl_resources`,
+  `is_search_criteria`, `request_param`, and a `_type_to_schema()` walker producing
+  `request_schema` / `response_schema` — JSON Schema **types** alongside the existing
+  placeholder **values**, which a generator cannot use.
+- **`array` typed by a docblock now survives the walk.** Magento's own SearchResults idiom is a
+  native `array` hint plus `@return Foo[]`; both walkers read the docblock in that case, so a
+  `getList` response is `{type: array, items: {…}}` instead of an opaque `{}`.
+- **Bare-`array` preflight** (`rest_warnings`) — a breadth-first scan of the `Api/` graph
+  reachable from the routes, reporting every genuinely untyped `array`/`mixed` by file and
+  line, with the store-wide HTTP 500 consequence spelled out. It is a warning, not a stop: the
+  spec is still useful and the property degrades to `{}`. Nothing else in the toolchain
+  reported this.
+- **A nine-assertion secret/privacy gate** at Phase 4, enforced by the emitter and blocking per
+  file: credential literals, JWT shapes, AWS keys and presigned-URL signatures, non-empty
+  secret-named variables, concrete hostnames, Postman's personal-identifier export keys, the
+  private env file, the lowercase `api/` directory, and the structural rule that examples may
+  derive only from schema types. A blocked artifact is withheld and reported; the clean ones
+  still ship, and the run exits `2`.
+- **`references/search-criteria-params.md`** — the fixed query-parameter set substituted for a
+  `SearchCriteriaInterface` route parameter. The DTO walker resolves module-locally by design,
+  so that parameter would otherwise degrade to a `string` request body that does not exist.
+  Declared once under `components/parameters` and `$ref`-ed, not repeated per operation.
+- **Seven contract tests** (`tests/test-docs-generate-{openapi,auth-mapping,searchcriteria,secret-gate,no-lowercase-api-dir,postman-privacy,bare-array-warning}.sh`)
+  and `tests/lib/yaml_subset.py`, a YAML reader that shares no code with the emitter so the
+  tests verify what was actually written.
+
+### Changed
+
+- **Behaviour change — new files appear by default.** `--docs` accepts `openapi`,
+  `http-client` and `postman` alongside the Markdown values, and the default is unchanged in
+  spirit (*produce every applicable doc*). A user re-running the skill on a module with REST
+  routes will therefore see new untracked files under `{module}/docs/api/`.
+- **`magento2-docs-generate`'s Core Rule is now *Never modifies source*, not *Markdown only*.**
+  YAML, JSON and `.http` are written, so the old rule was false as stated. The blast radius is
+  bounded the other way instead — by *where* rather than by extension: nothing outside
+  `{module}/docs/`, `{module}/README.md`, `{module}/CHANGELOG.md` and
+  `{output_root}/docs-generated/`, and never a `.php`/`.xml`/`.phtml`/`.less`/`.js`/`.graphqls`
+  file. The skill frontmatter no longer claims it "writes Markdown only".
+
+### Notes
+
+- Output nests under `{module}/docs/api/` and **never** `{module}/api/`. Every module with a
+  REST surface already has `{module}/Api/`, and on a case-insensitive filesystem — macOS by
+  default, Windows, any unpacked `.zip` — those are the same directory; creating one corrupts
+  the PSR-4 tree and breaks autoloading for the whole module. The emitter refuses such an
+  output directory outright.
+- `docs/api/http-client.private.env.json` is never generated. It is where the JetBrains client
+  stores your bearer token and it sits beside the `.http` file rather than inside `.idea/`, so
+  a stock `.gitignore` does not cover it. The run report emits adding it to the module
+  `.gitignore` as a required follow-up.
+- GraphQL gets no derivative artifact: `etc/schema.graphqls` is already machine-readable and
+  already checked in.
+- The `webapi.xml` ↔ `openapi.yaml` parity contract is specified here but the PHPUnit test that
+  asserts it belongs to `magento2-test-generate` — it is a `.php` file, which this skill may
+  not write.
+
 ## [1.32.1] — 2026-08-14 — guides shipped their encoding undeclared
 
 The developer and user guides are written as UTF-8 and are read straight off disk over `file://`,

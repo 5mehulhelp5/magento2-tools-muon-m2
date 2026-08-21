@@ -197,10 +197,24 @@ grep -n '<route ' etc/webapi.xml
 
 **Output fields per entry:**
 - `method` — HTTP verb: GET, POST, PUT, DELETE
-- `url` — URL template (e.g. `/V1/acme/orders/:id`)
+- `url` — URL template as written (e.g. `/V1/acme/orders/:id`)
+- `url_template` — the same URL with Magento's `:param` rewritten to OpenAPI/Postman
+  `{param}` (e.g. `/V1/acme/orders/{id}`)
+- `path_params` — ordered list of `{ "name": "id", "type": "integer" }` parsed from
+  `:(\w+)` in `url`. `type` is the OpenAPI primitive, resolved from the service-method
+  signature in surface 14; `string` when the signature cannot be read
 - `service_class` — value of `class` attribute under `<service>`
 - `service_method` — value of `method` attribute under `<service>`
-- `auth` — auth scopes from `<resources>` (anonymous/self/ACL resource)
+- `auth` — auth scopes from `<resources>`, comma-joined (display string, unchanged)
+- `auth_kind` — the classification OpenAPI security selection needs:
+  `anonymous` when any scope is `anonymous`; `acl` when any scope is a real ACL
+  resource; `self` when the only scope is `self`. A route with no `<resources>` is
+  treated as `acl`
+- `acl_resources` — the scopes that are neither `anonymous` nor `self`, e.g.
+  `["Acme_Sample::view"]`; empty otherwise
+- `is_search_criteria` — `true` when a parameter resolves to `*\Api\SearchCriteriaInterface`
+  (set in surface 14). Detected by **resolved FQCN, not by method name** — `getList` is a
+  convention, not a guarantee. See `references/search-criteria-params.md`
 - `file` — `etc/webapi.xml` relative to module root
 
 ---
@@ -331,10 +345,54 @@ build illustrative request/response shapes:
    precedes the service method declaration (method-scoped, not file-wide). Resolve short
    exception class names via the use-map to FQCNs.
 
+8. **Build `request_schema` / `response_schema`** — a parallel walk with `_type_to_schema()`,
+   mirroring `_type_to_example()`: same module-local resolution rule, same depth cap and
+   visited-set cycle guard, but emitting JSON Schema **types** instead of placeholder
+   **values**. Both are kept: `*_shape` feeds the Markdown examples, `*_schema` feeds
+   OpenAPI `components/schemas`. `{"file_id": 0}` is a valid example but tells a
+   generator nothing about `integer` vs `number`, nullability, or `format`.
+
+   | PHP type | Schema node |
+   |---|---|
+   | `string` | `{type: string}` |
+   | `int` | `{type: integer}` |
+   | `float` | `{type: number}` |
+   | `bool` | `{type: boolean}` |
+   | `?T`, `T\|null` | schema of `T` + `nullable: true` |
+   | `T[]` | `{type: array, items: <schema of T>}` |
+   | `array` / `mixed` | `{}` **and record a warning** (step 10) |
+   | DTO `*\Api\Data\*Interface` | `{type: object, title: <ShortName minus Interface>, properties: {…}}`, one property per `get*`/`is*` getter, snake_cased |
+   | non-module-local type | `{type: string}` — the same degradation the example walker applies |
+
+   `title` is what lets the emitter hoist the node into `components/schemas` and `$ref`
+   it; a node capped by depth or cycle guard is `{}` and carries none.
+
+9. **Prefer a docblock element type over a bare native `array`** — Magento types
+   collections as a native `array` hint plus `@return Foo[]` (the SearchResults idiom).
+   Both walkers read the docblock in that case, so `getItems(): array` with
+   `@return SampleInterface[]` yields `{type: array, items: {…Sample…}}` rather than
+   `{}`. `array<int, Foo>` and `array<Foo>` normalize to `Foo[]`.
+
+10. **Record bare `array` / `mixed`** — breadth-first over the module-local interface
+    graph reachable from every route's `service_class`, collecting each bare `array` or
+    `mixed` in a `@param`/`@return` annotation, and each bare native hint that **no**
+    docblock annotation types. `array<…>`, `array{…}`, `mixed[]` and `string[]` are typed
+    enough and are not hits. Emitted as the top-level `rest_warnings` surface, sorted by
+    `(file, line)`.
+
 **Output fields per entry** (extend each REST route entry with):
 - `request_shape` — JSON-serializable object or `null`
 - `response_shape` — JSON-serializable value or `null`
+- `request_schema` — JSON Schema node for the first DTO-typed parameter, or `null`
+- `response_schema` — JSON Schema node for the return type; `null` for `void`
+- `request_param` — the service-method parameter name that produced `request_shape`, or
+  `null`. `Magento\Framework\Webapi\ServiceInputProcessor` keys the REST request body by
+  parameter name (`{"sample": {…}}`), so an emitted body without it is rejected at runtime
 - `throws` — list of exception FQCNs extracted from the method's own `@throws` tags
+
+**Top-level output** (a sibling of `rest_routes`, not a per-route field):
+- `rest_warnings` — list of `{ kind, file, line, symbol, annotation, message }`, one per
+  bare `array`/`mixed` found in step 10. Empty when the graph is clean
 
 Shapes that cannot be resolved (unresolvable type, missing source file) degrade to
 `"string"` at the field level. The shape is still emitted; the caption **"Example —

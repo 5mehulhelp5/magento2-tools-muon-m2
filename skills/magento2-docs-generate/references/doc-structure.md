@@ -239,6 +239,175 @@ Each route under `{API_REF_ENDPOINTS}` renders as a subsection `### {METHOD} {ur
 
 ---
 
+## REST API Description Artifacts
+
+Rendered by `scripts/emit-api-artifacts.sh` from the same surface JSON that feeds
+`api-reference.md`. Generated only when `rest_routes` is non-empty, and only for the
+formats selected in Phase 1.
+
+`api-reference.md` is prose, for humans. These are machine-readable, for integrators:
+without them nobody can import the surface into a client, a mock server, or a contract
+test. Magento's own `GET /rest/<store>/schema` is not a substitute — it is Swagger 2.0
+(no `oneOf`, no meaningful `securitySchemes`, no error model), it needs a running and
+authenticated instance so it can neither ship with the module nor run in the published
+module's CI, and a single bare `array` annotation anywhere in a reachable type graph
+takes it down store-wide with HTTP 500 (see *Bare `array` preflight* below).
+
+### Target files
+
+```
+{module}/docs/api/
+├── openapi.yaml                              OpenAPI 3.1
+├── {slug}.http                               JetBrains HTTP Client
+├── http-client.env.json                      public env — NO secret values
+└── postman/
+    ├── {slug}.postman_collection.json        Collection v2.1
+    └── {slug}.postman_environment.json       placeholders only
+```
+
+`http-client.env.json` is emitted if and only if `{slug}.http` is.
+`http-client.private.env.json` is **never** written.
+
+**Never `{module}/api/` (lowercase).** Every module with a REST surface already has
+`{module}/Api/`. On a case-insensitive filesystem — macOS default, Windows, and any
+`.zip`/`dist` unpacked there — `api/` and `Api/` are the same directory, so writing one
+corrupts the PSR-4 tree and breaks autoloading for the whole module. Nesting under
+`docs/api/` avoids the collision; the emitter refuses an `OUTPUT_DIR` that would create
+it, and the Phase 4 gate asserts it was not created.
+
+### `{slug}` derivation
+
+1. Longest common literal path-segment prefix across all `rest_routes[].url` after the
+   version segment. `/V1/acme-sample/files`, `/V1/acme-sample/types` → `acme-sample`.
+2. If routes share no prefix, the `name` in `{module}/composer.json` with the vendor
+   stripped and a leading `module-` removed: `acme/module-order-export` → `order-export`.
+3. If neither resolves, `{vendor}-{module}` kebab-cased.
+
+The slug should match what a consumer already sees in the URL, so the spec file, the
+collection and the endpoint are greppable by the same string.
+
+### `openapi.yaml`
+
+- **Version:** OpenAPI `3.1.0`.
+- **`info.version`:** the `version` from `{module}/composer.json`, verbatim. If absent,
+  **omit the key** rather than inventing one — the never-invent-facts rule applies.
+- **`servers`:** templated, never a concrete host:
+  ```yaml
+  servers:
+    - url: "https://{host}/rest/{store}"
+      variables:
+        host:  { default: "magento.test" }
+        store: { default: "all" }
+  ```
+- **`paths`:** one entry per `url_template`, methods lowercased. `operationId` is
+  `{serviceClassShortName}_{service_method}` camelCased — derived, so it survives
+  regeneration unchanged.
+- **`parameters`:** one `in: path, required: true` entry per `path_params` entry, typed
+  from the service-method signature. A route flagged `is_search_criteria` instead
+  `$ref`s the shared set in `references/search-criteria-params.md`, declared once under
+  `components/parameters` rather than repeated per operation.
+- **`requestBody`:** present for POST/PUT/PATCH routes with a DTO-typed parameter. The
+  body is keyed by the **parameter name** (`{"sample": {…}}`), because that is what
+  `Magento\Framework\Webapi\ServiceInputProcessor` binds — a bare DTO body is rejected.
+  `request_param` in the surface JSON carries that name.
+- **`components.securitySchemes`:** `adminBearer`, `customerBearer`, `integrationBearer`,
+  all `type: http, scheme: bearer, bearerFormat: JWT`. Selected per route from
+  `auth_kind`: `anonymous` → `security: []` (explicitly no credentials); `self` →
+  `customerBearer`; anything else → `adminBearer` or `integrationBearer`, plus
+  `x-magento-acl: [<acl_resources>]` on the operation so the spec stays traceable to
+  `webapi.xml`.
+- **`components.schemas`:** one named schema per DTO reached by the walk; operations
+  `$ref` them. The name is the interface short name minus `Interface`.
+- **Error responses:** derived from `throws` plus the REST error model below — a single
+  `Error` component (`{message: string, parameters: object, trace: string}`) and the
+  standard mapping, plus 401 on every non-anonymous route and 403 on every ACL route.
+- **Examples:** reuse `request_shape` / `response_shape`. Same never-invent constraint
+  as the Markdown reference.
+
+### `{slug}.http`
+
+- One `###`-separated block per route, in `webapi.xml` order — so the file is reviewable
+  line-by-line against the XML.
+- A comment naming the service class, method, and ACL resource (or the auth scope).
+- Variables only: `{{baseUrl}}`, `{{store}}`, `{{authToken}}`. No literals.
+- Path parameters become `{{fileId}}`-style variables declared in `http-client.env.json`.
+- Bodies from `request_shape`, pretty-printed, keyed by the service-method parameter name.
+- `Authorization: Bearer {{authToken}}` on non-anonymous routes; **omitted entirely** on
+  `anonymous` ones.
+
+`http-client.env.json`:
+
+```json
+{
+  "dev": {
+    "baseUrl": "https://magento.test/rest",
+    "store": "all",
+    "authToken": ""
+  }
+}
+```
+
+`authToken` ships empty. Never a live value, never a default. Path-parameter variables
+ship empty for the same reason.
+
+### Postman
+
+Collection v2.1. Folders group routes by the first path segment after the slug; a route
+with nothing after the slug, or whose next segment is a path parameter, stays at
+collection root. Requests use `{{baseUrl}}`/`{{store}}`, and collection-level bearer auth
+references `{{authToken}}`; an `anonymous` route overrides it with `"auth": {"type":
+"noauth"}`. A `is_search_criteria` route carries the shared query parameters as
+`disabled` entries, so they are discoverable without being sent empty.
+
+The environment file lists every variable, with secret-valued ones as `"value": ""` and
+`"type": "secret"`.
+
+Two required omissions, both privacy:
+
+- **No `_postman_exported_by`, no `_postman_exported_using`, no numeric user id.** Postman
+  injects these on export. They identify a person, they are not API description, and they
+  must never be generated.
+- **`info._postman_id`** is a deterministic UUIDv5 derived from `{Vendor}_{Module}` — not
+  random — so regeneration is idempotent and produces a clean `git diff`.
+
+### Bare `array` preflight
+
+Before rendering, the extractor scans the `@param`/`@return` annotations and native type
+hints of every interface reachable from `rest_routes[].service_class` and records each
+bare `array` or `mixed` in `rest_warnings`. `array` that a docblock types — `array` plus
+`@return SampleInterface[]`, Magento's own SearchResults idiom — is **not** a hit; only a
+genuinely untyped one is.
+
+Each hit is reported in the Phase 2 doc plan and the Phase 5 report:
+
+```
+WARNING  Api/Data/SampleInterface.php:21 — `@param array $context`
+         Bare `array`/`mixed` breaks Magento's own schema generator
+         (Magento\Framework\Reflection\TypeProcessor). While present,
+         GET /rest/<store>/schema returns HTTP 500 for EVERY service on the
+         installation, not just this module. Use a typed array (`string[]`,
+         `mixed[]`) or a DTO interface.
+```
+
+This is a warning, not a hard stop — the emitted `openapi.yaml` is still useful and the
+affected property degrades to `{}`. But it must be loud: the failure is store-wide, and
+nothing else in the toolchain reports it.
+
+### Idempotence
+
+Two consecutive runs on an unchanged module produce **byte-identical** output. That is
+what makes the artifacts reviewable in a PR, and it is why the Postman collection id is
+derived rather than random and why nothing carries a timestamp.
+
+### Parity contract
+
+The generated `openapi.yaml` satisfies: the set of `(path_template, method)` pairs in
+`paths` equals the set of `(url_template, method)` pairs in `etc/webapi.xml`, in both
+directions. `magento2-test-generate` emits the PHPUnit test asserting this — XML + YAML
+parsing only, no Magento bootstrap, so it runs in a published module's CI. This skill
+cannot write that test itself: it is a `.php` file.
+---
+
 ## GraphQL API Reference Structure
 
 Rendered from `templates/graphql-reference.md`.
