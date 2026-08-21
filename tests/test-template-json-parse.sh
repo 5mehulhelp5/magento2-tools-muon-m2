@@ -26,6 +26,10 @@ while IFS= read -r tpl; do
         -e 's/{php_constraint}/~8.2.0/g' \
         -e 's/{framework_constraint}/103.0.7/g' \
         -e 's|{Short, meaningful description of what this module does}|Module description|g' \
+        -e 's/{POSTMAN_INFO}/{}/g' \
+        -e 's/{POSTMAN_ITEMS}/[]/g' \
+        -e 's/{POSTMAN_ENV_VALUES}/[]/g' \
+        -e 's/{HTTP_CLIENT_ENV}/{}/g' \
         "$tpl" > "$tmp"
 
     if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$tmp" 2>/tmp/json-parse.err; then

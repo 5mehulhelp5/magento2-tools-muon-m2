@@ -6,16 +6,20 @@ description:
     a README, developer guide, user guide (when a user surface exists), REST API reference
     (when REST routes exist), GraphQL reference (when GraphQL ops exist), technical
     reference, and CHANGELOG scaffold with illustrative examples derived from the schema.
-    Use for 'document this module' / 'generate module docs'. Read-only analysis; writes
-    Markdown only. For an architecture/quality review use `magento2-module-review`.
+    For a module with `etc/webapi.xml` it also emits machine-readable API description
+    artifacts under `{module}/docs/api/` — OpenAPI 3.1, a JetBrains `.http` file with a
+    secret-free env, and a Postman v2.1 collection + environment — with no live-instance
+    dependency. Use for 'document this module' / 'generate module docs'. Never modifies
+    source. For an architecture/quality review use `magento2-module-review`.
 ---
 
 # Magento 2 Docs Generate
 
-Read-only skill — extracts a module's public surface from its own code and XML files,
-then renders Markdown documentation. Unlike `magento2-module-review` (which performs an
-architecture/quality review), this skill generates human-readable documentation artifacts.
-It **never** modifies PHP or XML files.
+Read-only-with-respect-to-source skill — extracts a module's public surface from its own
+code and XML files, then renders documentation from it: Markdown for humans, and (when the
+module declares REST routes) OpenAPI/`.http`/Postman for machines. Unlike
+`magento2-module-review` (which performs an architecture/quality review), this skill
+generates documentation artifacts. It **never** modifies PHP, XML, or any other source file.
 
 ## Core Rules
 
@@ -25,10 +29,24 @@ It **never** modifies PHP or XML files.
   appear in the API Surface section.
 - **OMIT empty surfaces.** If a surface (events, plugins, REST routes, etc.) has no
   entries, that section is omitted entirely. No empty tables; no placeholder text.
-- **Markdown only.** This skill never modifies PHP, XML, JSON, or any non-Markdown file.
-  Output is the set of Markdown docs selected in Phase 1 (README, technical reference,
-  developer/user guides, REST/GraphQL references, CHANGELOG scaffold — each produced only
-  when applicable), plus a run report under `{output_root}/docs-generated/`.
+- **Never modifies source.** This skill never writes or modifies `.php`, `.xml`,
+  `.phtml`, `.less`, `.js`, `.graphqls`, or any file outside `{module}/docs/`,
+  `{module}/README.md`, `{module}/CHANGELOG.md`, and `{output_root}/docs-generated/`.
+  Within `{module}/docs/` it may write `.md`, `.yaml`, `.json`, and `.http`
+  documentation artifacts. Output is the set of docs selected in Phase 1 (README,
+  technical reference, developer/user guides, REST/GraphQL references, CHANGELOG
+  scaffold, and the API description artifacts — each produced only when applicable),
+  plus a run report under `{output_root}/docs-generated/`.
+- **No secrets, ever.** The API description artifacts are generated from static source
+  and never from a live API, and the Phase 4 gate blocks any file that would carry a
+  credential, a personal identifier, or a concrete hostname. The skill never generates
+  `docs/api/http-client.private.env.json` — that is the JetBrains token store, and it
+  sits beside the `.http` file rather than inside `.idea/`, so a stock `.gitignore`
+  does not cover it.
+- **`{module}/docs/api/`, never `{module}/api/`.** Every module with a REST surface
+  already has `{module}/Api/`. On a case-insensitive filesystem — macOS by default,
+  Windows, any unpacked `.zip` — `api/` and `Api/` are the same directory, so writing
+  one corrupts the PSR-4 tree and breaks autoloading for the whole module.
 - **Illustrative examples only.** JSON example blocks are generated from real DTO or
   GraphQL field types (names and types extracted from the schema). Every such block must
   carry the caption `> Example — illustrative, generated from the schema` immediately
@@ -73,9 +91,24 @@ Determine:
    - `api-reference`        → `{module}/docs/api-reference.md`         (only if REST routes exist)
    - `graphql-reference`    → `{module}/docs/graphql-reference.md`     (only if GraphQL operations exist)
    - `changelog`            → `{module}/CHANGELOG.md` (scaffold only; no history invented)
+   - `openapi`              → `{module}/docs/api/openapi.yaml`               (only if REST routes exist)
+   - `http-client`          → `{module}/docs/api/{slug}.http`
+                            + `{module}/docs/api/http-client.env.json`       (only if REST routes exist)
+   - `postman`              → `{module}/docs/api/postman/{slug}.postman_collection.json`
+                            + `{module}/docs/api/postman/{slug}.postman_environment.json`
+                                                                             (only if REST routes exist)
    Default: produce every applicable doc. Omit `user-guide` when no user surface is
-   present, `api-reference` when no REST routes exist, and `graphql-reference` when no
-   GraphQL operations are found.
+   present; omit `api-reference`, `openapi`, `http-client` and `postman` when no REST
+   routes exist; omit `graphql-reference` when no GraphQL operations are found.
+
+   `http-client.env.json` is emitted if and only if `{slug}.http` is.
+   `{slug}` is derived in `references/doc-structure.md` → *REST API Description
+   Artifacts*; it is what a consumer already sees in the URL, so the spec file, the
+   collection and the endpoint stay greppable by one string.
+
+   **GraphQL has no derivative artifact.** `etc/schema.graphqls` is already
+   machine-readable and already checked in; generating a second copy of it would only
+   create something to drift.
 
 ### Phase 2 — Extract Surface (GATE)
 
@@ -94,6 +127,17 @@ From the surface JSON, present the **doc plan** to the user:
 - Which surfaces are absent and will be omitted.
 - Which of the new docs (`developer-guide`, `user-guide`, `api-reference`,
   `graphql-reference`) will be produced or omitted, with the reason for each omission.
+- Which API description artifacts (`openapi`, `http-client`, `postman`) will be
+  produced, with their target paths — or the reason they are omitted.
+- **Every entry in the surface JSON's `rest_warnings`, as a WARNING**, one per line, in
+  the form `WARNING  {file}:{line} — \`{annotation}\`` followed by the recorded message.
+  These are bare `array`/`mixed` annotations in the `Api/` graph reachable from the
+  routes. They are a warning, not a stop — the emitted spec is still useful and the
+  affected property simply degrades to `{}` — but they must be loud, because
+  `Magento\Framework\Reflection\TypeProcessor` refuses a bare `array` and one offending
+  annotation anywhere in the graph takes `GET /rest/<store>/schema` down with HTTP 500
+  for **every** service on the installation, not just this module. Fixing them is a
+  human's job (or `magento2-static-analysis`'s); this skill is read-only w.r.t. source.
 
 **WAIT for "proceed" before writing any files.**
 
@@ -113,6 +157,26 @@ Follow the section order, example-derivation rules, error-model conventions,
 screenshot-appendix format, and Mermaid recipes defined in
 `${CLAUDE_SKILL_DIR}/references/doc-structure.md`.
 
+**API description artifacts** are not composed by hand. Run
+`${CLAUDE_SKILL_DIR}/scripts/emit-api-artifacts.sh` with `MODULE_PATH`, the
+`SURFACE_FILE` from Phase 2, and `FORMATS` set to the selected subset of
+`openapi,http-client,postman`. It fills these five templates:
+
+- `${CLAUDE_SKILL_DIR}/templates/openapi.yaml` → `{module}/docs/api/openapi.yaml`
+- `${CLAUDE_SKILL_DIR}/templates/http-client.http` → `{module}/docs/api/{slug}.http`
+- `${CLAUDE_SKILL_DIR}/templates/http-client.env.json` → `{module}/docs/api/http-client.env.json`
+- `${CLAUDE_SKILL_DIR}/templates/postman-collection.json` → `{module}/docs/api/postman/{slug}.postman_collection.json`
+- `${CLAUDE_SKILL_DIR}/templates/postman-environment.json` → `{module}/docs/api/postman/{slug}.postman_environment.json`
+
+The script — not the model — owns this rendering because the artifacts must be
+**byte-identical across runs** (that is what makes them reviewable in a PR, and why the
+Postman collection id is a UUIDv5 derived from `{Vendor}_{Module}` rather than random).
+It runs the Phase 4 secret/privacy gate itself and returns a JSON report naming what it
+wrote, what it blocked and why, and the `rest_warnings` it carried through. Its exit
+code is `0` for a clean run, `2` when at least one artifact was blocked, `1` on a hard
+error. Generation rules per format are in `references/doc-structure.md` → *REST API
+Description Artifacts*.
+
 Each table row in the technical reference must include the source file path so readers
 can verify the documentation against the code.
 
@@ -123,7 +187,9 @@ Before saving any file:
 - No unsubstituted `{tokens}` remain in the output.
 - Internal links (e.g. `[API Surface](#api-surface)`) resolve within the document.
 - No section contains an empty table or placeholder text such as "N/A" or "fill me in".
-- Confirm the skill has not written any `.php` or `.xml` file.
+- Confirm the skill has not written or modified any `.php`, `.xml`, `.phtml`, `.less`,
+  `.js` or `.graphqls` file, nor anything outside `{module}/docs/`,
+  `{module}/README.md`, `{module}/CHANGELOG.md`, and `{output_root}/docs-generated/`.
 - Every JSON example block parses as valid JSON (mental parse or `jq` check).
 - Every example block carries the caption `> Example — illustrative, generated from the schema`.
 - Every ` ```mermaid ``` ` block is properly fenced, brace/arrow-balanced, and uses
@@ -132,6 +198,30 @@ Before saving any file:
 - The `{DOCUMENTATION_LINKS}` token in `README.md` lists only the docs that were
   actually produced in this run (registered in
   `magento2-context/references/placeholder-schema.md`).
+- `openapi.yaml` parses as YAML and every `.json` artifact parses as JSON.
+
+#### Secret and privacy gate (blocking)
+
+`emit-api-artifacts.sh` enforces these before writing. **Any hit blocks the write for
+that file and is reported**; the other artifacts still ship. Confirm the reported
+`blocked` list is empty, and that the run did not silently skip the gate.
+
+| # | Assertion |
+|---|---|
+| 1 | No generated file matches `(?i)(bearer\s+[A-Za-z0-9._-]{8,}\|api[_-]?key\s*[:=]\s*\S\|secret\s*[:=]\s*\S\|password\s*[:=]\s*\S)` |
+| 2 | No value matches a JWT shape `eyJ[A-Za-z0-9_-]{6,}\.` |
+| 3 | No AWS-style key `(AKIA\|ASIA)[0-9A-Z]{16}`, and no `X-Amz-Signature=` / `X-Amz-Credential=` — a presigned URL **is** a bearer credential |
+| 4 | Every variable named `*token*`, `*secret*`, `*key*`, `*password*`, `*credential*` has an empty string value |
+| 5 | `servers[].url` and `baseUrl` contain no host outside `{host}`-template form or the documented `magento.test` default — no production hostname, no client domain, no private store host |
+| 6 | No `_postman_exported_by` / `_postman_exported_using` key; no email address anywhere (`[\w.+-]+@[\w-]+\.\w+`) |
+| 7 | No `docs/api/http-client.private.env.json` was written |
+| 8 | No `{module}/api/` (lowercase) directory was created |
+| 9 | Examples derive only from schema types. The skill must not read `var/log/`, `.env`, `app/etc/env.php`, `auth.json`, or any live HTTP response to build them |
+
+Rule 9 is the structural one; the other eight are backstops. Examples come from the
+Example-Derivation Table, which yields `"string"` and `0` — synthetic by construction. A
+real order increment id, customer email, bucket name or object key can only appear if
+someone widened the input, so widening the input is what is forbidden.
 
 ### Phase 5 — Report
 
@@ -144,6 +234,13 @@ Write a run report to
 - Surface inventory: entries found per category.
 - Surfaces omitted (not found in the module).
 - Examples skipped due to unresolved types (list field names and the unresolved type).
+- API description artifacts produced (paths), or the reason each was omitted.
+- Any artifact **blocked** by the Phase 4 gate, naming the assertion and the matched text.
+- Every `rest_warnings` entry, in the Phase 2 WARNING form.
+- **Required follow-up** when a `.http` file was written: *add
+  `docs/api/http-client.private.env.json` to the module `.gitignore` before committing.*
+  The JetBrains HTTP Client writes your bearer token there and it sits beside the `.http`
+  file, not inside `.idea/`, so a stock `.gitignore` does not cover it.
 - Skill version: `magento2-docs-generate@1.3.1`.
 
 ## Inputs
@@ -154,8 +251,16 @@ Write a run report to
 /magento2-docs-generate --module=Acme_OrderExport --docs=readme,developer-guide,api-reference
 /magento2-docs-generate --module=Acme_OrderExport --docs=changelog
 /magento2-docs-generate --module=Acme_OrderExport --docs=readme,technical-reference,developer-guide,user-guide,api-reference,graphql-reference,changelog
+/magento2-docs-generate --module=Acme_OrderExport --docs=openapi
+/magento2-docs-generate --module=Acme_OrderExport --docs=api-reference,openapi,http-client,postman
 /magento2-docs-generate --module=Acme_OrderExport --docs-root=<path>
 ```
+
+`--docs` accepts `openapi`, `http-client` and `postman` alongside the Markdown values.
+There is no separate flag. Default behaviour is unchanged in spirit — *produce every
+applicable doc* — so a module with REST routes now gets all three artifacts by default,
+and an existing user re-running the skill will see new untracked files appear under
+`{module}/docs/api/`.
 
 `--docs-root=<path>` — output-root override; see "Output root" below.
 
@@ -172,6 +277,24 @@ Written INSIDE the documented module:
 {module}/docs/graphql-reference.md   (conditional — only when GraphQL operations exist)
 {module}/CHANGELOG.md
 ```
+
+API description artifacts, all under `{module}/docs/api/` and all conditional on a
+non-empty `rest_routes` surface (never `{module}/api/` — see the Core Rules):
+
+```
+{module}/docs/
+├── api-reference.md                              (prose, for humans)
+└── api/
+    ├── openapi.yaml                              OpenAPI 3.1
+    ├── {slug}.http                               JetBrains HTTP Client
+    ├── http-client.env.json                      public env — NO secret values
+    └── postman/
+        ├── {slug}.postman_collection.json        Collection v2.1
+        └── {slug}.postman_environment.json       placeholders only
+```
+
+`{module}/docs/api/http-client.private.env.json` is **never** generated — see the
+Core Rules and the Phase 5 follow-up.
 
 Run report (project root, NOT inside the module):
 
@@ -198,7 +321,11 @@ run's reports collect under its folder.
   REST routes, GraphQL, DB schema, extension attributes, `@api` annotations, and
   `dispatch(` calls (events fired).
 - `${CLAUDE_SKILL_DIR}/references/doc-structure.md` — canonical section order for the
-  README and technical-reference documents.
+  README and technical-reference documents, plus the per-format generation rules for the
+  API description artifacts.
+- `${CLAUDE_SKILL_DIR}/references/search-criteria-params.md` — the fixed query-parameter
+  set substituted for a `SearchCriteriaInterface` route parameter, which the module-local
+  DTO walker cannot resolve.
 - `magento2-context/references/naming.md` — shared naming conventions.
 - `magento2-context/references/placeholder-schema.md` — token registry.
 - `magento2-context/references/changelog-format.md` — canonical CHANGELOG structure and
@@ -210,6 +337,10 @@ run's reports collect under its folder.
 
 - `${CLAUDE_SKILL_DIR}/scripts/extract-surface.sh` — read-only module surface extractor;
   emits surface JSON (entries + source file paths). Never mutates files. Never installs.
+- `${CLAUDE_SKILL_DIR}/scripts/emit-api-artifacts.sh` — deterministic renderer for the
+  API description artifacts. Reads the surface JSON plus the module's `composer.json`,
+  enforces the Phase 4 secret/privacy gate, and writes only under `{module}/docs/api/`.
+  Never reads a live API. Exit `0` clean, `2` blocked, `1` hard error.
 
 ## Templates
 
@@ -220,6 +351,11 @@ run's reports collect under its folder.
 - `templates/api-reference.md` → `{module}/docs/api-reference.md` (conditional)
 - `templates/graphql-reference.md` → `{module}/docs/graphql-reference.md` (conditional)
 - `templates/changelog-scaffold.md` → `{module}/CHANGELOG.md`
+- `templates/openapi.yaml` → `{module}/docs/api/openapi.yaml` (conditional)
+- `templates/http-client.http` → `{module}/docs/api/{slug}.http` (conditional)
+- `templates/http-client.env.json` → `{module}/docs/api/http-client.env.json` (conditional)
+- `templates/postman-collection.json` → `{module}/docs/api/postman/{slug}.postman_collection.json` (conditional)
+- `templates/postman-environment.json` → `{module}/docs/api/postman/{slug}.postman_environment.json` (conditional)
 
 All tokens used in templates are registered in
 `magento2-context/references/placeholder-schema.md`.
@@ -232,3 +368,5 @@ All tokens used in templates are registered in
 | `magento2-module-review` | Architecture/quality review — use when you want findings, not documentation |
 | `magento2-module-create` | Scaffolds the module whose docs this skill generates |
 | `magento2-release` | Consumes `CHANGELOG.md`; run after docs are in place |
+| `magento2-test-generate` | Owns the `webapi.xml` ↔ `openapi.yaml` parity test — a PHPUnit `.php` file, which this skill may not write |
+| `magento2-static-analysis` | Fixes the bare `array`/`mixed` annotations this skill only warns about |

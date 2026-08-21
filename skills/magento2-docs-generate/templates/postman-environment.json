@@ -1,0 +1,5 @@
+{
+  "name": "{Vendor}_{Module}",
+  "values": {POSTMAN_ENV_VALUES},
+  "_postman_variable_scope": "environment"
+}

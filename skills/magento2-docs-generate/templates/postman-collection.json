@@ -1,0 +1,10 @@
+{
+  "info": {POSTMAN_INFO},
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{authToken}}", "type": "string" }
+    ]
+  },
+  "item": {POSTMAN_ITEMS}
+}

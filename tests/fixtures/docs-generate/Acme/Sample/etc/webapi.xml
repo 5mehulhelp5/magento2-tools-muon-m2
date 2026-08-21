@@ -13,8 +13,20 @@
         <service class="Acme\Sample\Api\SampleRepositoryInterface" method="upsert"/>
         <resources><resource ref="Acme_Sample::manage"/></resources>
     </route>
+    <!-- SearchCriteria route: the parameter resolves outside the module, so the
+         operation must take the shared searchCriteria query parameters instead of a body. -->
+    <route url="/V1/acme-sample/search" method="GET">
+        <service class="Acme\Sample\Api\SampleRepositoryInterface" method="getList"/>
+        <resources><resource ref="Acme_Sample::view"/></resources>
+    </route>
+    <!-- Customer-token (`self`) scope: customerBearer, never adminBearer. -->
+    <route url="/V1/acme-sample/me" method="GET">
+        <service class="Acme\Sample\Api\SampleRepositoryInterface" method="getForCurrentCustomer"/>
+        <resources><resource ref="self"/></resources>
+    </route>
     <!-- Service contract lives in another module: the example walker cannot resolve
-         it module-locally, so request_shape/response_shape must stay null. -->
+         it module-locally, so request_shape/response_shape must stay null. Also the
+         only `anonymous` route — it must carry no `security` at all. -->
     <route url="/V1/acme-sample/external/:id" method="GET">
         <service class="Magento\Customer\Api\CustomerRepositoryInterface" method="getById"/>
         <resources><resource ref="anonymous"/></resources>
