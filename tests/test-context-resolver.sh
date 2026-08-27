@@ -25,7 +25,7 @@ trap 'rm -rf "$WORK"' EXIT
 cp -r skills "$WORK/" 2>/dev/null || true
 rm -rf "$WORK/.claude/.cache" 2>/dev/null || true
 
-OUT="$(cd "$WORK" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
+OUT="$(cd "$WORK" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
 
 if [ -z "$OUT" ]; then
     echo "FAIL: resolver produced no output"

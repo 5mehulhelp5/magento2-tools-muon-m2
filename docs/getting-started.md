@@ -57,7 +57,7 @@ every teammate gets the plugin offered automatically on folder trust:
 
 Run `/plugin` in Claude Code and confirm `magento2-tools@muon-m2` is installed and
 enabled. The skills are namespaced `magento2-tools:magento2-<skill>` — for example
-`magento2-tools:magento2-bug-fix`.
+`magento2-tools:fix`.
 
 ## How you invoke skills
 
@@ -65,12 +65,12 @@ Two ways, both equivalent:
 
 1. **Plain language.** Describe the work; Claude Code matches it to a skill from the
    skill's description. *"This module throws a 500 on checkout, fix it"* → triggers
-   `magento2-bug-fix`. *"Scaffold a module for order export with a REST API"* →
-   triggers `magento2-module-create`.
+   `fix`. *"Scaffold a module for order export with a REST API"* →
+   triggers `module-create`.
 2. **Explicit invocation.** Name the skill, optionally with flags the skill documents:
 
    ```
-   /magento2-tools:magento2-deploy --env=staging Acme_OrderExport
+   /magento2-tools:deploy --env=staging Acme_OrderExport
    ```
 
 Plain language is the normal mode. Explicit invocation is useful when you want a
@@ -80,13 +80,13 @@ specific skill, mode, or flag (e.g. `--validate-only`, `--diff`, `--scan-only`).
 
 Before you run anything, know the ground rules every skill follows:
 
-- **Read-only skills stay read-only.** `magento2-debug`, `magento2-module-review`
+- **Read-only skills stay read-only.** `debug`, `review`
   (unless you ask for fixes), and the audit skills never modify your code. Their output
   is the deliverable.
-- **Code-writing skills gate on your approval.** `magento2-feature-implement` won't
-  write code until you approve its blueprint *and* its task plan. `magento2-bug-fix`
+- **Code-writing skills gate on your approval.** `feature` won't
+  write code until you approve its blueprint *and* its task plan. `fix`
   won't touch production code until you approve the root-cause analysis.
-  `magento2-deploy` presents its plan and waits for "proceed". `magento2-release` waits
+  `deploy` presents its plan and waits for "proceed". `release` waits
   for you to literally type `release` before pushing anything.
 - **Production is double-gated.** Deploys to production require an explicit
   `--env=production` flag *and* an interactive confirmation. Smoke tests refuse to run
@@ -110,7 +110,7 @@ Open your Magento project in Claude Code and ask:
 Resolve the Magento 2 project context
 ```
 
-This runs `magento2-context`, the hub skill every other skill consults. It detects:
+This runs `context`, the hub skill every other skill consults. It detects:
 
 - vendor prefix, Magento edition and version, PHP version and constraints
 - the **runner** — bare PHP vs Docker, and the exact command prefix to use
@@ -119,7 +119,7 @@ This runs `magento2-context`, the hub skill every other skill consults. It detec
 - which quality tools are installed (`phpcs`, `phpstan`, `phpunit`, …)
 
 The result is emitted as one JSON document and cached to
-`.claude/.cache/magento2-context.json` (keyed by `composer.lock`/`composer.json`/
+`.claude/.cache/context.json` (keyed by `composer.lock`/`composer.json`/
 `CLAUDE.md` hashes, 24h TTL). Every value records *where it came from*
 (`resolution_source`), so you can spot and correct a wrong detection.
 
@@ -137,7 +137,7 @@ All three are read-only.
 Quick review of the module app/code/<Vendor>/<Module>
 ```
 
-Runs `magento2-module-review` in quick mode: security (ACL, CSRF, escaping, SQL
+Runs `review` in quick mode: security (ACL, CSRF, escaping, SQL
 safety), persistence and DI hygiene, controller and API checks, registration sanity.
 Findings come back ordered by severity with `file:line` evidence.
 
@@ -173,7 +173,7 @@ Quick-create mode generates only the core files (`registration.php`, `etc/module
 `composer.json`, `etc/di.xml`, `README.md`, `CHANGELOG.md`) under
 `app/code/<Vendor>/HelloWorld`, lints them (`php -l`, `xmllint`,
 `composer validate`), and offers next steps — including the matching
-`magento2-deploy` invocation to enable it. Nothing is deployed automatically.
+`deploy` invocation to enable it. Nothing is deployed automatically.
 
 From here:
 

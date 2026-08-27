@@ -15,8 +15,8 @@
 #      `vendor/<vendor>/<pkg>/` and declare their path in registration.php, so the walk
 #      found no theme.xml and stopped at the first hop.
 #
-# Either one alone is enough to mis-report. Because `active` gates every magento2-breeze-*
-# skill and steers dimension selection in magento2-audit, a false negative silently drops
+# Either one alone is enough to mis-report. Because `active` gates every breeze-*
+# skill and steers dimension selection in audit, a false negative silently drops
 # Breeze coverage from a storefront that needs it — which is worse than refusing outright,
 # because nothing signals the gap.
 #
@@ -119,7 +119,7 @@ cat > "$WORK/vendor/magento/module-theme/Test/Unit/Model/_files/frontend/magento
 <theme><title>Fixture</title><parent>Magento/blank</parent></theme>
 EOF
 
-OUT="$(cd "$WORK" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
+OUT="$(cd "$WORK" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
 
 if [ -z "$OUT" ]; then
     echo "FAIL: resolver produced no output"
@@ -211,7 +211,7 @@ cat > "$WORK2/vendor/acme/theme-frontend-storefront/theme.xml" <<'EOF'
 <?xml version="1.0"?><theme><title>Acme</title><parent>Magento/luma</parent></theme>
 EOF
 
-OUT2="$(cd "$WORK2" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
+OUT2="$(cd "$WORK2" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
 
 python3 - "$OUT2" <<'PY'
 import sys, json

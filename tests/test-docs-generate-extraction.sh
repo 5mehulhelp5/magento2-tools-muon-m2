@@ -7,7 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 command -v python3 >/dev/null 2>&1 || { echo "skip: python3 not on PATH"; exit 77; }
 
 FIXTURE="tests/fixtures/docs-generate/Acme/Sample"
-SCRIPT="skills/magento2-docs-generate/scripts/extract-surface.sh"
+SCRIPT="skills/docs/scripts/extract-surface.sh"
 [ -d "$FIXTURE" ] || { echo "FAIL: fixture missing: $FIXTURE"; exit 1; }
 
 # Pre-create a stable output path so the extractor does not place the JSON inside

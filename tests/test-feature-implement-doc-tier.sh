@@ -3,7 +3,7 @@
 # duplicating them.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-F=skills/magento2-feature-implement/references/documentation-guide.md
+F=skills/feature/references/documentation-guide.md
 FAIL=0
 grep -qiE 'cross-link|link (to|into) the (per-)?module' "$F" \
     || { echo "FAIL: documentation-guide does not state the HTML tier links into module docs"; FAIL=1; }

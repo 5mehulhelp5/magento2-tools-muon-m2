@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# guard-docs-path.sh — PreToolUse guard enforcing the magento2-context .docs/ rule.
+# guard-docs-path.sh — PreToolUse guard enforcing the context .docs/ rule.
 #
 # Blocks Write/Edit of a .docs/ artifact anywhere other than {CLAUDE_PROJECT_DIR}/.docs/
 # in a detected Magento project. Fails OPEN (exit 0) on any uncertainty: missing python3,
@@ -70,7 +70,7 @@ if [ "$(docs_path_decide "$project_root" "$file_path" "$is_magento")" = "deny" ]
     {
         echo "magento2-tools: blocked writing a .docs/ artifact at '$rel'."
         echo "All .docs/ artifacts must live at the project root: $project_root/.docs/"
-        echo "(magento2-context Core Rules: never write .docs/ under the Magento tree)."
+        echo "(context Core Rules: never write .docs/ under the Magento tree)."
     } >&2
     exit 2
 fi

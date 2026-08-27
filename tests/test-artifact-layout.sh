@@ -5,7 +5,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 FAIL=0
-LAYOUT=skills/magento2-context/references/artifact-layout.md
+LAYOUT=skills/context/references/artifact-layout.md
 
 if [ ! -f "$LAYOUT" ]; then
     echo "FAIL: $LAYOUT missing"; exit 1
@@ -29,7 +29,7 @@ grep -q 'DOCS_ROOT' "$LAYOUT" || { echo "FAIL: artifact-layout.md does not docum
 grep -q -- '--docs-root' "$LAYOUT" || { echo "FAIL: artifact-layout.md does not document --docs-root"; FAIL=1; }
 
 # findings-schema File Naming must no longer hardcode the old scope-word audit names.
-SCHEMA=skills/magento2-context/references/findings-schema.md
+SCHEMA=skills/context/references/findings-schema.md
 grep -q 'artifact-layout.md' "$SCHEMA" || { echo "FAIL: findings-schema.md does not cite artifact-layout.md"; FAIL=1; }
 
 # Negative assertion: the pre-unification scheme hardcoded a flat `.docs/audits/security-{scope}`

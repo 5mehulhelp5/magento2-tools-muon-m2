@@ -15,7 +15,7 @@
 # never forwarded, and that stderr is the ONLY channel build-findings.sh turns into scanner_errors.
 #
 # Also locks the calibration that turning the parsers back ON made load-bearing:
-#   * a phpmd finding never reaches a BLOCKING severity (magento2-audit fails its verdict on
+#   * a phpmd finding never reaches a BLOCKING severity (audit fails its verdict on
 #     critical AND high alike, so "not critical" is not enough — priority 1 caps at medium);
 #   * a module that ships phpmd.xml is judged by its own rules, and that is recorded as provenance.
 # Pass 2 covers the success shapes, so the crash-path type guard cannot cost us a healthy run.
@@ -30,7 +30,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-SCRIPT="skills/magento2-static-analysis/scripts/run-analysis.sh"
+SCRIPT="skills/lint/scripts/run-analysis.sh"
 [ -f "$SCRIPT" ] || { echo "FAIL: $SCRIPT not found"; exit 1; }
 
 WORK="$(mktemp -d)"
@@ -142,7 +142,7 @@ findings2 = json.load(open(os.environ['FINDINGS2'], encoding='utf-8'))
 stderr2 = open(os.environ['ERRLOG2'], encoding='utf-8', errors='replace').read()
 fail = []
 
-# magento2-audit blocks its verdict on BOTH of these:
+# audit blocks its verdict on BOTH of these:
 #   consolidate.sh → `if sev in ('critical','high'): blockers += 1` → `FAIL if blockers`
 BLOCKING = ('critical', 'high')
 

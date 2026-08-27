@@ -28,7 +28,7 @@ deployment, auditing, upgrading, and releasing.
   `app/code/` to a scaffolded, reviewed, tested, deployed, and releasable first module,
   including team enablement and CI wiring.
 - **[Flows and scenarios](flows-and-scenarios.md)** — the deep dive: architecture
-  (hub-and-spoke around `magento2-context`), per-skill phase flows with diagrams, the
+  (hub-and-spoke around `context`), per-skill phase flows with diagrams, the
   approval-gate map, the artifact map, and six end-to-end scenario walkthroughs.
 - **[Skills reference](skills-reference.md)** — one compact section per skill:
   invocation, flags, phases, outputs, related skills.
@@ -41,7 +41,7 @@ deployment, auditing, upgrading, and releasing.
 
 The repository [README](../README.md) covers the repo layout, the contract-test harness
 (`bash tests/run-all.sh`), and skill versioning. Skill versions live in
-`skills/magento2-context/references/skill-versioning.md`; the plugin version lives in
+`skills/context/references/skill-versioning.md`; the plugin version lives in
 `.claude-plugin/plugin.json` (see [CHANGELOG.md](../CHANGELOG.md)).
 
 ### This repository is public

@@ -5,7 +5,7 @@ enough, and how to plug its outputs into CI.
 
 ## The context resolver
 
-`magento2-context` is the single source of truth every skill consults. Resolution
+`context` is the single source of truth every skill consults. Resolution
 priority for each value:
 
 1. explicit `CLAUDE.md` hint
@@ -31,7 +31,7 @@ What gets resolved:
 
 ### Cache
 
-The JSON is cached at `.claude/.cache/magento2-context.json`. The cache key combines
+The JSON is cached at `.claude/.cache/context.json`. The cache key combines
 the sha256 of `composer.lock`, `composer.json`, and `CLAUDE.md`; the resolver
 short-circuits only when the key is byte-identical and the cache is fresh (default 24h).
 
@@ -48,8 +48,8 @@ Env vars win over `.claude/m2.json`:
 | `M2_PHP_CONTAINER` | auto-detect | Name of the running PHP container. If the named container isn't running, detection falls through to generic name patterns. |
 | `M2_MAGENTO_ROOT` | auto-detect (`.` or `src`) | Magento root inside the repo. |
 | `M2_CACHE_TTL` | `86400` (24h) | Context cache TTL in seconds; `0` disables caching. |
-| `MAGENTO2_FI_PER_TASK_COMMITS` | unset | `1` enables per-task git commits in `magento2-feature-implement`. |
-| `MAGENTO2_FI_TDD` | unset | `1` turns on **test-first (TDD) mode** in `magento2-feature-implement`: behaviour-bearing `M*`/`X*` tasks are implemented test-first (write the failing test, watch it fail, then the minimal code). Off by default; `spike` mode always exempt. |
+| `MAGENTO2_FI_PER_TASK_COMMITS` | unset | `1` enables per-task git commits in `feature`. |
+| `MAGENTO2_FI_TDD` | unset | `1` turns on **test-first (TDD) mode** in `feature`: behaviour-bearing `M*`/`X*` tasks are implemented test-first (write the failing test, watch it fail, then the minimal code). Off by default; `spike` mode always exempt. |
 | `MAGENTO2_SMOKE_NO_BROWSER` | unset | `1` forces **curl-only** smoke testing: REST and error-signal suites run in full, admin/storefront suites run a degraded curl reachability tier and emit a Medium coverage finding. Use in CI where no headless browser is installed. Lowest-priority of the explicit switches — outranked by a prompt directive, the `--no-browser` flag, and `CLAUDE.md`'s `Smoke browser: off`. |
 
 ## `.claude/m2.json`
@@ -71,13 +71,13 @@ Skills read your project's `CLAUDE.md` for these lines:
 | `Feature implement: per-task commits = on` | feature-implement | Same as `MAGENTO2_FI_PER_TASK_COMMITS=1` / `--per-task-commits` |
 | `Feature implement: tdd = on` | feature-implement | Same as `MAGENTO2_FI_TDD=1` / `--tdd` — behaviour tasks implemented test-first (red → green → refactor) |
 | `Smoke browser: off` | feature-implement, accessibility-audit | Same as `MAGENTO2_SMOKE_NO_BROWSER=1` / `--no-browser` — smoke and the pa11y runtime pass never drive a browser |
-| `Explorer model: sonnet` | feature-implement / module-review / bug-fix | Model tier (`haiku`/`sonnet`/`opus`) for the read-only `magento2-explorer` comprehension agent. Defaults to `haiku`; name the tier that matches your session model to run it there. Does not affect `magento2-reviewer`. |
+| `Explorer model: sonnet` | feature / review / fix | Model tier (`haiku`/`sonnet`/`opus`) for the read-only `explorer` comprehension agent. Defaults to `haiku`; name the tier that matches your session model to run it there. Does not affect `reviewer`. |
 | MySQL slow-log path | performance-audit / debug | Where to read the slow query log when non-default |
 
 `CLAUDE.md` participates in the context cache key, so editing it takes effect on the
 next skill run without manual cache busting.
 
-> The per-task `Model tier (advisory)` fields in `magento2-feature-implement` plans are
+> The per-task `Model tier (advisory)` fields in `feature` plans are
 > recommendations only — the harness does not route Skill-tool tasks by tier, so they run on the
 > session model. The one directive that takes live effect is `Explorer model:` above (the read-only
 > explorer subagent). See the feature-implement task-breakdown guide for the tier-by-type mapping.
@@ -100,17 +100,17 @@ whether to commit `.docs/`:
 
 ```bash
 # In CI: validate without deploying. Exit 0 = all required pre-flight checks pass.
-/magento2-tools:magento2-deploy --validate-only --strict --env=local Acme_ModuleA
+/magento2-tools:deploy --validate-only --strict --env=local Acme_ModuleA
 ```
 
 Produces `.docs/deployments/{ts}-local.json` with `"mode": "validate-only"` — parse it
-or just use the exit code. `magento2-release` runs exactly this as its Phase 2 gate.
+or just use the exit code. `release` runs exactly this as its Phase 2 gate.
 
 ### Findings to GitHub Code Scanning
 
-`magento2-module-review`, `magento2-security-audit`, `magento2-performance-audit`, and
-`magento2-module-upgrade` all emit the shared findings schema
-(`skills/magento2-context/references/findings-schema.md`) as JSON, with a SARIF 2.1.0
+`review`, `security`, `perf-audit`, and
+`upgrade` all emit the shared findings schema
+(`skills/context/references/findings-schema.md`) as JSON, with a SARIF 2.1.0
 sibling generated by the shared `emit-sarif.sh`. Upload the `.sarif` with
 `github/codeql-action/upload-sarif` to surface findings as PR annotations.
 
@@ -128,14 +128,14 @@ JSON artifacts are stable enough for trend tracking — diff successive
 | Info | Positive observation, skipped check, context |
 
 Domain calibrations: security findings are bumped by PCI/GDPR impact
-(`skills/magento2-security-audit/references/severity-security.md`); performance
+(`skills/security/references/severity-security.md`); performance
 findings are weighted by impact at scale
-(`skills/magento2-performance-audit/references/severity-perf.md`).
+(`skills/perf-audit/references/severity-perf.md`).
 
 ## Smoke test tooling
 
 Skills that exercise a running Magento instance follow one policy, defined in
-`skills/magento2-context/references/runtime-test-tooling.md`:
+`skills/context/references/runtime-test-tooling.md`:
 
 - **REST, GraphQL, and every Web-API surface use `curl`** — always, with no override. A browser
   masks the contract under test.
@@ -152,7 +152,7 @@ To force curl-only testing, in priority order:
 #    "implement X, do not use browser"   /   "…use curl for the smoke tests"
 
 # 2. Flag
-/magento2-tools:magento2-feature-implement "add X" --no-browser
+/magento2-tools:feature "add X" --no-browser
 
 # 3. CLAUDE.md
 echo 'Smoke browser: off' >> CLAUDE.md

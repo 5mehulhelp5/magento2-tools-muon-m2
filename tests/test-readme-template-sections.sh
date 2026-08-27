@@ -4,8 +4,8 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-T=skills/magento2-docs-generate/templates/readme.md
-SCHEMA=skills/magento2-context/references/placeholder-schema.md
+T=skills/docs/templates/readme.md
+SCHEMA=skills/context/references/placeholder-schema.md
 FAIL=0
 
 for section in "## Features" "## Configuration" "## Public API" "## Known Limitations"; do

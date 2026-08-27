@@ -36,7 +36,7 @@ trap 'rm -rf "$WORK"' EXIT
 cp -r skills "$WORK/" 2>/dev/null || true
 
 run_resolver() {
-    (cd "$WORK" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)
+    (cd "$WORK" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)
 }
 
 check_null_with_reason() {

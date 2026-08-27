@@ -59,7 +59,7 @@ cd "$WORK"
 set +e
 MODULES="Acme_Probe" ENV=local STRICT=0 \
     RUNNER="" RUNNER_KIND="null" MAGENTO_CLI="" \
-    bash "$OLDPWD/skills/magento2-deploy/scripts/preflight.sh" > preflight.json 2> preflight.err
+    bash "$OLDPWD/skills/deploy/scripts/preflight.sh" > preflight.json 2> preflight.err
 EXIT=$?
 set -e
 cd "$OLDPWD"

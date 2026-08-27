@@ -12,7 +12,7 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-POLICY="skills/magento2-context/references/runtime-test-tooling.md"
+POLICY="skills/context/references/runtime-test-tooling.md"
 FAIL=0
 
 fail() {
@@ -48,21 +48,21 @@ done
 # --- 2. Delegating skills carry a pointer ------------------------------------
 while IFS='|' read -r doc label; do
     [ -f "$doc" ] || { fail "$label: $doc not found"; continue; }
-    grep -qF 'magento2-context/references/runtime-test-tooling.md' "$doc" \
+    grep -qF 'context/references/runtime-test-tooling.md' "$doc" \
         || fail "$label ($doc) has no pointer to the shared policy"
 done <<'EOF'
-skills/magento2-deploy/references/smoke-tests.md|deploy
-skills/magento2-bug-fix/references/reproduction-patterns.md|bug-fix
-skills/magento2-accessibility-audit/references/runtime-pa11y.md|accessibility-audit
+skills/deploy/references/smoke-tests.md|deploy
+skills/fix/references/reproduction-patterns.md|bug-fix
+skills/a11y-audit/references/runtime-pa11y.md|accessibility-audit
 EOF
 
 # --- 3. feature-implement delegates and no longer skips the browser suites -----
-FI_RUNNER="skills/magento2-feature-implement/references/smoke-runner.md"
-FI_GUIDE="skills/magento2-feature-implement/references/smoke-test-guide.md"
+FI_RUNNER="skills/feature/references/smoke-runner.md"
+FI_GUIDE="skills/feature/references/smoke-test-guide.md"
 
 for doc in "$FI_RUNNER" "$FI_GUIDE"; do
     [ -f "$doc" ] || { fail "feature-implement: $doc not found"; continue; }
-    grep -qF 'magento2-context/references/runtime-test-tooling.md' "$doc" \
+    grep -qF 'context/references/runtime-test-tooling.md' "$doc" \
         || fail "feature-implement ($doc) has no pointer to the shared policy"
 done
 
@@ -86,8 +86,8 @@ grep -qF 'browser_policy' "$FI_GUIDE" \
 # raw-CDP rung for fake-passing. If the context probe ever reports one again, browser_policy
 # resolves to `auto`, the mandatory coverage finding is suppressed, and the curl tier runs
 # while the report claims full coverage — the exact fake-pass this policy exists to block.
-RESOLVER="skills/magento2-context/scripts/resolve-context.sh"
-DRIVER="skills/magento2-feature-implement/scripts/smoke-browser.mjs"
+RESOLVER="skills/context/scripts/resolve-context.sh"
+DRIVER="skills/feature/scripts/smoke-browser.mjs"
 
 if [ -f "$RESOLVER" ]; then
     # Look only inside the probe function, so unrelated prose elsewhere cannot trip this.

@@ -1,5 +1,5 @@
 ---
-description: Security audit — CVEs, secrets, EQP static rules, cross-module patterns (magento2-security-audit)
-argument-hint: "[--scope=module|site|vendor] [--format=markdown|json|sarif] [--include-magento-core] [<modules>…]"
+description: Security audit — CVEs, secrets, EQP static rules, cross-module patterns (security)
+argument-hint: "[--scope=module|site|vendor] [--format=markdown|json|sarif] [--include-magento-core] [<modules>…] [--agents|--inline]"
 ---
-Use the `magento2-tools:magento2-security-audit` skill. Forward these arguments verbatim: $ARGUMENTS
+Use the `magento2-tools:security` skill. Forward these arguments verbatim: $ARGUMENTS

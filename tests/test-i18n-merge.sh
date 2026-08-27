@@ -24,7 +24,7 @@ cat > "$WORK/de_DE.csv" <<'EOF'
 "Removed Old","Entfernt"
 EOF
 
-bash skills/magento2-i18n/scripts/merge-csv.sh "$WORK/fresh.csv" "$WORK/de_DE.csv" 2>/dev/null
+bash skills/i18n/scripts/merge-csv.sh "$WORK/fresh.csv" "$WORK/de_DE.csv" 2>/dev/null
 
 # Translation preserved
 if ! grep -q '"Hello","Hallo"' "$WORK/de_DE.csv"; then

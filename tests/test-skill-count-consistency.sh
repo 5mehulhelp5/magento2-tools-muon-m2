@@ -2,7 +2,7 @@
 # test-skill-count-consistency.sh — prose skill counts must match the skills on disk.
 #
 # The README and developer docs state how many skills the plugin ships (e.g. "18 skills",
-# "18 magento2-* skills", "18 *skills*"). That count drifts every time a skill is added.
+# "18 *skills*"). That count drifts every time a skill is added.
 # This test pins every such claim in the *tracked* docs to the actual number of directories
 # under skills/.
 #
@@ -30,8 +30,8 @@ DOCS=(
     docs/configuration.md
 )
 
-# Matches: "<N> skills", "<N> magento2-* skills", "<N> *skills*" (markdown emphasis).
-PATTERN='[0-9]+ +\*?(magento2-\* +)?\*?skills?\*?'
+# Matches: "<N> skills", "<N> *skills*" (markdown emphasis).
+PATTERN='[0-9]+ +\*?\*?skills?\*?'
 
 fail=0
 checked=0

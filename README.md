@@ -14,7 +14,7 @@ context-resolver so the same toolkit adapts to any project and environment.
 ```
 
 `--scope user` makes it available in every project. Use `--scope project` to pin it to
-one repo. Skills are then invoked namespaced, e.g. `magento2-tools:magento2-bug-fix`.
+one repo. Skills are then invoked namespaced, e.g. `magento2-tools:fix`.
 
 **Team auto-enable** — commit to a project's `.claude/settings.json`:
 
@@ -74,51 +74,51 @@ Developer documentation lives in [`docs/`](docs/README.md):
 
 | Skill | Purpose |
 |-------|---------|
-| `magento2-context` | Resolves project context (vendor, runner, Magento root/version, tools). The hub every other skill delegates environment questions to. Owns the shared findings emitters (`emit-findings.sh` / `emit-json.sh` / `emit-sarif.sh`). |
-| `magento2-module-create` | Scaffold a new module. |
-| `magento2-module-review` | Review a module / diff against standards. Reuses the hub's shared JSON/SARIF emitters. |
-| `magento2-feature-implement` | End-to-end feature workflow; orchestrates most other skills. |
-| `magento2-bug-fix` | Reproduce → RCA → minimal TDD fix → regression test → review → deploy. |
-| `magento2-deploy` | Pre-flight validation, ordered deploy, rollback. |
-| `magento2-test-generate` | Generate unit/integration/API/MFTF tests. |
-| `magento2-module-upgrade` | BC-break detection, deprecation maps. |
-| `magento2-security-audit` | CVE + secret + EQP static scan. |
-| `magento2-performance-audit` | N+1, caching, indexer/queue review. |
-| `magento2-debug` | Investigate logs / DI graph when reproduction is hard. |
-| `magento2-eav-attribute` | Add EAV attributes idempotently. |
-| `magento2-graphql-create` | Schema-first GraphQL surfaces. |
-| `magento2-webapi-create` | Contract-first REST / Web-API surfaces for an existing entity (webapi.xml routes + service contract + DTO + repository + di.xml + acl.xml + functional tests). |
-| `magento2-frontend-create` | Themes, components, email templates. |
-| `magento2-data-migration` | Idempotent data patches / importers. |
-| `magento2-release` | Version bump, changelog, tag, publish. |
-| `magento2-i18n` | Translation extraction / locale management. |
-| `magento2-adminhtml-form` | Scaffold an adminhtml UI-component edit form (form XML + DataProvider + New/Edit/Save/Delete + button blocks). |
-| `magento2-adminhtml-listing` | Scaffold an adminhtml grid/listing (listing XML + DataProvider + columns + actions + mass actions), paired with adminhtml-form. |
-| `magento2-extension-point` | Wire behaviour onto an existing class: plugin (before/after/around interceptor), observer (events.xml + Observer), or preference. |
-| `magento2-system-config` | Add admin Stores → Configuration settings: system.xml + config.xml + ACL + optional source/backend models + typed Config reader. |
-| `magento2-cli-command` | Scaffold a bin/magento console command or cron job on an existing module: Symfony Command + CommandList registration, or crontab.xml + job class with a delegate service. |
-| `magento2-message-queue` | Scaffold an async message-queue surface on an existing module: communication.xml topic + queue_topology/publisher/consumer.xml bindings + a typed message DTO + publisher + idempotent consumer. |
-| `magento2-static-analysis` | Run the static-analysis gate (phpcs, phpstan, phpmd, php-cs-fixer, rector) and apply safe auto-fixes; emit residual violations as ranked findings (JSON + SARIF). |
-| `magento2-docs-generate` | Generate or refresh a module's technical documentation from its own code — public @api surface, events, plugins, REST/GraphQL, DB schema, and more. For a module with REST routes it also emits OpenAPI 3.1, a JetBrains `.http` file, and a Postman collection under `docs/api/`. Never modifies source. |
-| `magento2-indexer` | Scaffold a custom indexer + materialized view (mview) on an existing module: indexer.xml, mview.xml subscriptions, an ActionInterface indexer class + batched action class. |
-| `magento2-marketplace-prep` | Assess an existing module's Adobe Marketplace / EQP submission readiness: composer metadata, licensing, structure, MFTF tests, docs, packaging hygiene. Read-only; emits a tiered scored report (JSON + SARIF, `outputKind=marketplace`). |
-| `magento2-accessibility-audit` | Audit a module's/theme's storefront templates for WCAG 2.1 Level AA issues (alt text, labels, ARIA, headings, keyboard, contrast). Static-first; optional pa11y runtime pass. Read-only; emits ranked findings (JSON + SARIF, `outputKind=accessibility`). |
-| `magento2-breeze-child-theme` | Scaffold a Swissup Breeze (Breezefront) child theme: theme.xml `Swissup/breeze-*` parent + registration.php + composer.json + `web/css/breeze/_default.less` (`@critical`) + breeze-only layout. |
-| `magento2-breeze-module-adapt` | Adapt an existing module to Breeze by generating a separate companion `{Vendor}_{Module}Breeze` module (breeze.js JS registration + `web/css/breeze` LESS + Cash `$.widget` stubs). Never edits the target. |
-| `magento2-breeze-compat-audit` | Read-only static audit of a module's Breeze compatibility (RequireJS/Knockout/jQuery-widget/mixins). Emits ranked findings (JSON + SARIF, `outputKind=compatibility`) + a verdict. |
-| `magento2-audit` | Read-only release-readiness orchestrator: fans out every findings dimension (review + security + performance + static-analysis + accessibility + marketplace + breeze-compat) in parallel and consolidates them into ONE deduplicated, severity-ranked report + one merged SARIF (`outputKind=audit`). The *inspect* counterpart to `magento2-feature-implement`. |
+| `context` | Resolves project context (vendor, runner, Magento root/version, tools). The hub every other skill delegates environment questions to. Owns the shared findings emitters (`emit-findings.sh` / `emit-json.sh` / `emit-sarif.sh`). |
+| `module-create` | Scaffold a new module. |
+| `review` | Review a module / diff against standards. Reuses the hub's shared JSON/SARIF emitters. |
+| `feature` | End-to-end feature workflow; orchestrates most other skills. |
+| `fix` | Reproduce → RCA → minimal TDD fix → regression test → review → deploy. |
+| `deploy` | Pre-flight validation, ordered deploy, rollback. |
+| `test-generate` | Generate unit/integration/API/MFTF tests. |
+| `upgrade` | BC-break detection, deprecation maps. |
+| `security` | CVE + secret + EQP static scan. |
+| `perf-audit` | N+1, caching, indexer/queue review. |
+| `debug` | Investigate logs / DI graph when reproduction is hard. |
+| `eav-attribute` | Add EAV attributes idempotently. |
+| `graphql` | Schema-first GraphQL surfaces. |
+| `webapi` | Contract-first REST / Web-API surfaces for an existing entity (webapi.xml routes + service contract + DTO + repository + di.xml + acl.xml + functional tests). |
+| `frontend` | Themes, components, email templates. |
+| `data-migration` | Idempotent data patches / importers. |
+| `release` | Version bump, changelog, tag, publish. |
+| `i18n` | Translation extraction / locale management. |
+| `admin-form` | Scaffold an adminhtml UI-component edit form (form XML + DataProvider + New/Edit/Save/Delete + button blocks). |
+| `admin-listing` | Scaffold an adminhtml grid/listing (listing XML + DataProvider + columns + actions + mass actions), paired with adminhtml-form. |
+| `extension-point` | Wire behaviour onto an existing class: plugin (before/after/around interceptor), observer (events.xml + Observer), or preference. |
+| `system-config` | Add admin Stores → Configuration settings: system.xml + config.xml + ACL + optional source/backend models + typed Config reader. |
+| `cli-command` | Scaffold a bin/magento console command or cron job on an existing module: Symfony Command + CommandList registration, or crontab.xml + job class with a delegate service. |
+| `message-queue` | Scaffold an async message-queue surface on an existing module: communication.xml topic + queue_topology/publisher/consumer.xml bindings + a typed message DTO + publisher + idempotent consumer. |
+| `lint` | Run the static-analysis gate (phpcs, phpstan, phpmd, php-cs-fixer, rector) and apply safe auto-fixes; emit residual violations as ranked findings (JSON + SARIF). |
+| `docs` | Generate or refresh a module's technical documentation from its own code — public @api surface, events, plugins, REST/GraphQL, DB schema, and more. For a module with REST routes it also emits OpenAPI 3.1, a JetBrains `.http` file, and a Postman collection under `docs/api/`. Never modifies source. |
+| `indexer` | Scaffold a custom indexer + materialized view (mview) on an existing module: indexer.xml, mview.xml subscriptions, an ActionInterface indexer class + batched action class. |
+| `marketplace` | Assess an existing module's Adobe Marketplace / EQP submission readiness: composer metadata, licensing, structure, MFTF tests, docs, packaging hygiene. Read-only; emits a tiered scored report (JSON + SARIF, `outputKind=marketplace`). |
+| `a11y-audit` | Audit a module's/theme's storefront templates for WCAG 2.1 Level AA issues (alt text, labels, ARIA, headings, keyboard, contrast). Static-first; optional pa11y runtime pass. Read-only; emits ranked findings (JSON + SARIF, `outputKind=accessibility`). |
+| `breeze-theme` | Scaffold a Swissup Breeze (Breezefront) child theme: theme.xml `Swissup/breeze-*` parent + registration.php + composer.json + `web/css/breeze/_default.less` (`@critical`) + breeze-only layout. |
+| `breeze-adapt` | Adapt an existing module to Breeze by generating a separate companion `{Vendor}_{Module}Breeze` module (breeze.js JS registration + `web/css/breeze` LESS + Cash `$.widget` stubs). Never edits the target. |
+| `breeze-compat` | Read-only static audit of a module's Breeze compatibility (RequireJS/Knockout/jQuery-widget/mixins). Emits ranked findings (JSON + SARIF, `outputKind=compatibility`) + a verdict. |
+| `audit` | Read-only release-readiness orchestrator: fans out every findings dimension (review + security + performance + static-analysis + accessibility + marketplace + breeze-compat) in parallel and consolidates them into ONE deduplicated, severity-ranked report + one merged SARIF (`outputKind=audit`). The *inspect* counterpart to `feature`. |
 
 ### Dependency graph
 
-`magento2-context` is the universal leaf — every other skill resolves environment through
+`context` is the universal leaf — every other skill resolves environment through
 it and it depends on nothing. It also owns the shared findings emitters
 (`emit-findings.sh` → `emit-json.sh` / `emit-sarif.sh`) that every findings-emitting skill
-reuses. `magento2-feature-implement` is the top orchestrator.
+reuses. `feature` is the top orchestrator.
 
 ```
-magento2-context  ◄── (called by all others; depends on nothing; owns the shared findings emitters)
+context  ◄── (called by all others; depends on nothing; owns the shared findings emitters)
 
-magento2-feature-implement ──► module-create, module-review, test-generate,
+feature ──► module-create, module-review, test-generate,
                                eav-attribute, graphql-create, webapi-create,
                                frontend-create, data-migration, adminhtml-form,
                                extension-point, system-config, cli-command,
@@ -126,37 +126,37 @@ magento2-feature-implement ──► module-create, module-review, test-generate
                                deploy, debug, security-audit, performance-audit,
                                bug-fix
 
-magento2-bug-fix           ──► context, module-review, deploy, data-migration, debug
-magento2-deploy            ──► context, module-upgrade, release
-magento2-module-create     ──► context, module-review
-magento2-module-review     ──► context        (+ reuses context's emit-findings.sh)
-magento2-security-audit    ──► context, module-review, module-upgrade
-magento2-performance-audit ──► context, module-review, security-audit
-magento2-eav-attribute     ──► context, module-create, module-review
-magento2-graphql-create    ──► context, module-create, module-review, test-generate
-magento2-webapi-create     ──► context, module-create, module-review, test-generate
-magento2-frontend-create   ──► context, module-create, module-review
-magento2-module-upgrade    ──► context, module-review, test-generate
-magento2-data-migration    ──► context, module-review
-magento2-test-generate     ──► context, module-create
-magento2-release           ──► context, deploy
-magento2-i18n              ──► context
-magento2-debug             ──► context, performance-audit, security-audit
-magento2-adminhtml-form      ──► context, module-create, module-review, test-generate
-magento2-adminhtml-listing   ──► context, module-create, module-review
-magento2-extension-point     ──► context, module-create, module-review
-magento2-system-config       ──► context, module-create, module-review
-magento2-cli-command         ──► context, module-create, module-review, system-config
-magento2-message-queue       ──► context, module-create, module-review
-magento2-indexer             ──► context, module-create, module-review
-magento2-static-analysis     ──► context, module-review   (+ reuses context's emit-findings.sh)
-magento2-docs-generate       ──► context
-magento2-marketplace-prep    ──► context, module-review, security-audit   (+ reuses context's emit-findings.sh)
-magento2-accessibility-audit ──► context, module-review   (+ reuses context's emit-findings.sh)
-magento2-breeze-child-theme  ──► context
-magento2-breeze-module-adapt ──► context, breeze-compat-audit
-magento2-breeze-compat-audit ──► context, module-review   (+ reuses context's emit-findings.sh)
-magento2-audit               ──► context, module-review, security-audit, performance-audit,
+fix           ──► context, module-review, deploy, data-migration, debug
+deploy            ──► context, module-upgrade, release
+module-create     ──► context, module-review
+review     ──► context        (+ reuses context's emit-findings.sh)
+security    ──► context, module-review, module-upgrade
+perf-audit ──► context, module-review, security-audit
+eav-attribute     ──► context, module-create, module-review
+graphql    ──► context, module-create, module-review, test-generate
+webapi     ──► context, module-create, module-review, test-generate
+frontend   ──► context, module-create, module-review
+upgrade    ──► context, module-review, test-generate
+data-migration    ──► context, module-review
+test-generate     ──► context, module-create
+release           ──► context, deploy
+i18n              ──► context
+debug             ──► context, performance-audit, security-audit
+admin-form      ──► context, module-create, module-review, test-generate
+admin-listing   ──► context, module-create, module-review
+extension-point     ──► context, module-create, module-review
+system-config       ──► context, module-create, module-review
+cli-command         ──► context, module-create, module-review, system-config
+message-queue       ──► context, module-create, module-review
+indexer             ──► context, module-create, module-review
+lint     ──► context, module-review   (+ reuses context's emit-findings.sh)
+docs       ──► context
+marketplace    ──► context, module-review, security-audit   (+ reuses context's emit-findings.sh)
+a11y-audit ──► context, module-review   (+ reuses context's emit-findings.sh)
+breeze-theme  ──► context
+breeze-adapt ──► context, breeze-compat-audit
+breeze-compat ──► context, module-review   (+ reuses context's emit-findings.sh)
+audit               ──► context, module-review, security-audit, performance-audit,
                                  static-analysis, accessibility-audit, marketplace-prep,
                                  breeze-compat-audit   (consolidates their findings; reuses emit-findings.sh)
 ```
@@ -167,32 +167,47 @@ Thin slash-command shortcuts for common operations. Each forwards your arguments
 underlying skill — no behaviour changes, and the write commands keep every approval/production
 gate. They are always namespaced:
 
+<!-- BEGIN GENERATED: commands (gen-routing.sh) -->
 | Command | Routes to | Use |
 |---------|-----------|-----|
-| `/magento2-tools:context`  | `magento2-context` | resolve project context (`--no-cache`) |
-| `/magento2-tools:snapshot` | `magento2-debug` (snapshot) | one-page health snapshot |
-| `/magento2-tools:review`   | `magento2-module-review` | review a module / `--diff` |
-| `/magento2-tools:security` | `magento2-security-audit` | security audit |
-| `/magento2-tools:perf`     | `magento2-performance-audit` | performance audit |
-| `/magento2-tools:deploy`   | `magento2-deploy` | deploy (gated) |
-| `/magento2-tools:bugfix`   | `magento2-bug-fix` | reproduce → RCA → fix (gated) |
-| `/magento2-tools:feature`  | `magento2-feature-implement` | feature orchestrator (gated) |
-| `/magento2-tools:release`  | `magento2-release` | cut a release (gated) |
-| `/magento2-tools:test`     | `magento2-test-generate` | generate unit/integration/API/MFTF tests |
-| `/magento2-tools:upgrade`  | `magento2-module-upgrade` | BC-break detection and upgrade plan (gated) |
-| `/magento2-tools:i18n`     | `magento2-i18n` | extract strings / manage locale CSVs |
-| `/magento2-tools:lint`     | `magento2-static-analysis` | static analysis + safe auto-fixes (gated) |
-| `/magento2-tools:scaffold` | `magento2-module-create` | code-generation dispatcher (routes to a generator; that skill gates) |
-| `/magento2-tools:audit`    | `magento2-audit` | full release-readiness audit — all dimensions, one consolidated report + merged SARIF |
+| `/magento2-tools:audit` | `audit` | Full release-readiness audit — every findings dimension consolidated into one ranked report + merged SARIF |
+| `/magento2-tools:bugfix` | `fix` | Reproduce → root-cause → minimal TDD fix → regression test → review (gated) |
+| `/magento2-tools:context` | `context` | Resolve the Magento 2 project context — vendor, runner, versions, theme, tools |
+| `/magento2-tools:deploy` | `deploy` | Deploy Magento 2 module.— pre-flight, ordered deploy, rollback (gated) |
+| `/magento2-tools:docs` | `docs` | Generate or refresh a module's technical documentation from its own code — README, guides, API references, CHANGELOG scaffold |
+| `/magento2-tools:feature` | `feature` | End-to-end Magento 2 feature implementation orchestrator (gated) |
+| `/magento2-tools:i18n` | `i18n` | Extract translatable strings and manage locale CSV files for a Magento 2 module |
+| `/magento2-tools:lint` | `lint` | Run the static-analysis gate (phpcs, phpstan, phpmd, php-cs-fixer, rector) and apply safe auto-fixes for a Magento 2 module (gated) |
+| `/magento2-tools:perf` | `perf-audit` | Performance audit — N+1, caching, indexer/queue review |
+| `/magento2-tools:release` | `release` | Release a Magento 2 module — version bump, changelog, tag, publish (gated) |
+| `/magento2-tools:review` | `review` | Review a Magento 2 module or diff against standards |
+| `/magento2-tools:scaffold` | `module-create` | Entry point for Magento 2 code generation — routes the request to the matching generator skill (defaults to module-create for a whole new module) |
+| `/magento2-tools:security` | `security` | Security audit — CVEs, secrets, EQP static rules, cross-module patterns |
+| `/magento2-tools:snapshot` | `debug` | One-page Magento 2 health snapshot — indexers, caches, queues, cron, versions |
+| `/magento2-tools:test` | `test-generate` | Generate unit, integration, API, JS, or MFTF tests for a Magento 2 module |
+| `/magento2-tools:upgrade` | `upgrade` | Detect BC breaks, deprecations, and required changes when upgrading a Magento 2 module to a new Magento/PHP version (gated) |
+<!-- END GENERATED: commands -->
 
 The six write commands (`deploy`, `bugfix`, `feature`, `release`, `upgrade`, `lint`) are user-invoked only; the
-read-only eight (`context`, `snapshot`, `review`, `security`, `perf`, `test`, `i18n`, `audit`) may also be auto-suggested.
-The `scaffold` dispatcher routes to `magento2-module-create` and guides generation to specialist skills.
+read-only nine (`context`, `snapshot`, `review`, `security`, `perf`, `test`, `i18n`, `audit`, `docs`) may also be auto-suggested.
+The `scaffold` dispatcher routes to `module-create` and guides generation to specialist skills.
 All arguments/flags are passed straight through to the skill, which is the source of truth for behaviour and gates.
+
+**Subagents or one flow — your choice.** The audit/RCA commands accept `--agents` /
+`--inline` (or set `m2.executionMode` in the project's `.claude/settings.json`): `agents`
+fans analysis out to the read-only `reviewer`/`explorer` subagents in parallel, `inline`
+runs the same steps sequentially in the conversation. Defaults preserve pre-2.0
+behaviour (`audit` fans out; everything else runs inline). Approval gates always run in
+the main conversation. Contract: `skills/context/references/execution-modes.md`.
+
+**Security scans are live, with no shipped advisory data.** The `security` skill resolves
+dependency advisories at scan time (`composer audit`) and Adobe patch state through the
+store's own `vendor/bin/patch-status`; offline runs state "advisories were NOT checked"
+in `scanner_errors` instead of silently passing.
 
 ## Per-project environment overrides
 
-`magento2-context` auto-detects the runner (Docker vs bare PHP) and the Magento root.
+`context` auto-detects the runner (Docker vs bare PHP) and the Magento root.
 For non-standard setups, override detection (env var wins over file):
 
 ```bash
@@ -216,9 +231,9 @@ detection. Changing any override busts the resolver cache automatically.
 .claude-plugin/
   plugin.json        # plugin manifest
   marketplace.json   # this repo doubles as its own marketplace ("muon-m2")
-skills/              # 33 magento2-* skills (auto-discovered by Claude Code)
-commands/            # 14 /magento2-tools:<verb> shortcut commands (auto-discovered)
-agents/              # first-party read-only subagents: magento2-reviewer (per-dimension review) + magento2-explorer (code comprehension/tracing)
+skills/              # 33 skills (auto-discovered by Claude Code)
+commands/            # 16 /magento2-tools:<verb> shortcut commands (auto-discovered)
+agents/              # first-party read-only subagents: reviewer (per-dimension review) + explorer (code comprehension/tracing)
 hooks/               # PreToolUse guard: keeps .docs/ artifacts at the project root
 tests/               # contract test harness
 scripts/             # release-notes helper (used by .github/workflows/release.yml)
@@ -236,7 +251,7 @@ bash tests/run-all.sh
 
 Contract tests cover bash syntax, template lint (PHP/XML/JSON/GraphQL/CSV/JS), SKILL.md
 frontmatter validity, cross-reference integrity (including `${CLAUDE_SKILL_DIR}` /
-`${CLAUDE_PLUGIN_ROOT}` and `magento2-<skill>/…` cross-refs), context-resolver behaviour
+`${CLAUDE_PLUGIN_ROOT}` and `<skill>/…` cross-refs), context-resolver behaviour
 (bare/docker runner contract + src-layout/override fixtures), plugin↔marketplace version
 sync, skill-version-registry consistency, and golden-output snapshots of the shared findings emitters (`emit-json` / `emit-sarif`). CI additionally runs `shellcheck`. Tests that
 need a missing interpreter exit 77 (SKIP) rather than failing.
@@ -257,6 +272,8 @@ static string with no runtime lookup, so it does not update on its own.
 
 ## Versioning
 
-Skill versions and changelog live in
-`skills/magento2-context/references/skill-versioning.md`. The plugin itself is versioned
-in `.claude-plugin/plugin.json`; see `CHANGELOG.md`.
+Each skill's version lives in its `SKILL.md` frontmatter (`version:`) — the single source
+of truth. The table in `skills/context/references/skill-versioning.md` and the README
+command table are **generated** (`gen-versions.sh` / `gen-routing.sh` under
+`skills/context/scripts/`); contract tests fail when either is stale. The plugin itself
+is versioned in `.claude-plugin/plugin.json`; change narrative lives in `CHANGELOG.md`.

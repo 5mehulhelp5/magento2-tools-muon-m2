@@ -25,8 +25,8 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-BASELINE_SH="$PWD/skills/magento2-feature-implement/scripts/smoke-baseline.sh"
-DIFF_SH="$PWD/skills/magento2-feature-implement/scripts/smoke-tail-since.sh"
+BASELINE_SH="$PWD/skills/feature/scripts/smoke-baseline.sh"
+DIFF_SH="$PWD/skills/feature/scripts/smoke-tail-since.sh"
 [ -x "$BASELINE_SH" ] || { echo "FAIL: $BASELINE_SH not executable"; exit 1; }
 [ -x "$DIFF_SH" ] || { echo "FAIL: $DIFF_SH not executable"; exit 1; }
 

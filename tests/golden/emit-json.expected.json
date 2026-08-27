@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1.0",
-  "skill": "magento2-module-review",
+  "skill": "review",
   "skillVersion": "2.3.0",
   "skillVersions": [
-    "magento2-module-review@2.3.0",
-    "magento2-context@1.6.0"
+    "review@2.3.0",
+    "context@1.6.0"
   ],
   "outputKind": "review",
   "target": {

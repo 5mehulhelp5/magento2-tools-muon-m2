@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-command-routing.sh — every commands/*.md must be a well-formed thin pass-through to a
-# real magento2-* skill, and the set must be exactly the 15 expected shortcuts. Write commands
+# real skill, and the set must be exactly the 16 expected shortcuts. Write commands
 # must be user-only (disable-model-invocation: true).
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -9,21 +9,22 @@ CMD_DIR="commands"
 FAIL=0
 
 # expected: command verb -> target skill
-EXPECTED="context:magento2-context
-snapshot:magento2-debug
-review:magento2-module-review
-security:magento2-security-audit
-perf:magento2-performance-audit
-deploy:magento2-deploy
-bugfix:magento2-bug-fix
-feature:magento2-feature-implement
-release:magento2-release
-test:magento2-test-generate
-upgrade:magento2-module-upgrade
-i18n:magento2-i18n
-lint:magento2-static-analysis
-scaffold:magento2-module-create
-audit:magento2-audit"
+EXPECTED="context:context
+snapshot:debug
+review:review
+security:security
+perf:perf-audit
+deploy:deploy
+bugfix:fix
+feature:feature
+release:release
+test:test-generate
+upgrade:upgrade
+i18n:i18n
+lint:lint
+scaffold:module-create
+audit:audit
+docs:docs"
 
 if [ ! -d "$CMD_DIR" ]; then echo "FAIL: $CMD_DIR/ directory not found"; exit 1; fi
 
@@ -51,7 +52,7 @@ for cmd in deploy bugfix feature release upgrade lint; do
 done
 
 # 2b. read-only commands must NOT be user-only (auto-invokable)
-for cmd in context snapshot review security perf test i18n audit; do
+for cmd in context snapshot review security perf test i18n audit docs; do
     f="$CMD_DIR/$cmd.md"
     [ -f "$f" ] || continue
     grep -qE '^disable-model-invocation: +true' "$f" \
@@ -78,5 +79,5 @@ for f in "$CMD_DIR"/*.md; do
 done
 
 [ "$FAIL" -eq 0 ] || { echo "RESULT: FAIL"; exit 1; }
-echo "command routing: 15 commands valid, well-formed, routed to real skills"
+echo "command routing: 16 commands valid, well-formed, routed to real skills"
 exit 0

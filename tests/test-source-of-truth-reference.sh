@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-REF="skills/magento2-context/references/source-of-truth.md"
+REF="skills/context/references/source-of-truth.md"
 FAIL=0
 
 if [ ! -f "$REF" ]; then

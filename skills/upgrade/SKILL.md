@@ -1,0 +1,184 @@
+---
+name: upgrade
+version: 1.2.0
+description:
+    Upgrade an existing Magento 2 module to a newer Magento version, newer PHP version,
+    or newer framework dependency. Use when the user wants to bump Magento support,
+    update PHP constraints, replace deprecated API usage, or scan for and remediate BC
+    breaks. Drives: deprecation scan → BC-break detection → patch generation → review →
+    test → report. Calls magento2-tools:review (diff mode) and magento2-tools:test-generate.
+---
+
+# Magento 2 Module Upgrade
+
+Bring an existing module up to a newer Magento or PHP target. The change list is
+**derived** (from scans), not user-described.
+
+## Core Rules
+
+- **Target before scan.** Always resolve the upgrade target in Phase 1; never scan
+  without a concrete target.
+- **Auto-fix only known-safe Rector rules.** Manual approval required for non-trivial
+  rewrites.
+- **BC-breaks are documented, not silently fixed.** A BC-break may break callers; surface
+  it in `UPGRADE.md` so the consumer knows.
+- **Per-task commits.** Each Rector rule run, each manual edit, each BC-break note is its
+  own commit. Reverting one shouldn't lose others.
+- **Test before declare-done.** A passing test suite is the gate to Phase 7.
+
+## Workflow
+
+### Phase 0 — Context Resolution
+
+Invoke `context`. Capture current Magento + PHP versions, framework constraint,
+runner, tools (rector, phpstan, semgrep).
+
+### Phase 1 — Target Resolution
+
+Determine the upgrade target from the user request:
+
+| Phrase | Resolves to |
+|--------|-------------|
+| "to Magento 2.4.7" | `magento_target=2.4.7`, keep PHP target |
+| "to Magento 2.5" | `magento_target=2.5.0`, may force PHP bump |
+| "drop PHP 8.1" | `php_min=8.2`, keep Magento target |
+| "compatibility scan" | No target; full report on current code |
+
+State the target explicitly. Ask for clarification if multiple targets fit.
+
+### Phase 2 — Scan
+
+Run scanners in order; record what was available and what wasn't.
+
+| Scanner                                                                                 | Purpose                                               |
+|-----------------------------------------------------------------------------------------|-------------------------------------------------------|
+| Adobe UCT (`vendor/bin/uct upgrade:check`, edition-gated)                               | First-party compatibility scan                        |
+| Rector (core `rector/rector` + hand-listed rules)                                       | Identify rewritable deprecations                      |
+| `vendor/bin/phpcs --standard=Magento2` (if `magento/magento-coding-standard` installed) | Magento-specific lints                                |
+| Custom AST scan (per `references/deprecation-map.md`)                                   | Removed classes/methods per Magento version           |
+| Composer constraint scan                                                                | Detect constraints incompatible with target           |
+| PHPStan                                                                                 | Errors that surface only at the new PHP/Magento level |
+
+Emit a **scan report**: each finding categorized as:
+- `auto-fixable` (Rector can do it)
+- `manual-fixable` (needs human/LLM intervention)
+- `bc-break` (caller must update; surfaces an API change)
+
+### Phase 3 — Plan (APPROVAL GATE)
+
+Present the scan report grouped by category. Wait for "proceed."
+
+The user can opt into `--include-bc-breaks` if they want the skill to attempt automated
+BC-break remediation; default is "report only."
+
+### Phase 4 — Apply
+
+- Auto-fixable: run Rector with the relevant rule set. One commit per rule set applied.
+- Manual-fixable: edit each file directly. One commit per logical change.
+- BC-break: write a note in `UPGRADE.md` (template at `templates/upgrade-md.md`) and
+  skip the code change.
+
+### Phase 5 — Test
+
+1. Run unit tests; fix breaks introduced by changes.
+2. If module has no tests: invoke `test-generate --types=unit` for the changed
+   files before applying further changes.
+3. Run integration tests if available; fix breaks.
+4. If the module declares `webapi.xml` or `schema.graphqls`: run API tests.
+
+### Phase 6 — Review
+
+Invoke `review --diff` against the pre-upgrade ref. Fix Critical/High
+findings.
+
+### Phase 7 — Report
+
+Save to `{output_root}/upgrades/{Vendor}_{Module}-{from}-to-{to}-{date}.md`, where
+`{output_root}` is the `--docs-root` value when the caller passed one, else
+`{ctx.docs_root}` (see "Output Root" below):
+- Scope (versions, modules, scanners run)
+- Findings (auto-fixed, manually-fixed, BC-breaks)
+- BC-break consumer notice (paste of `UPGRADE.md`)
+- Test results
+- Recommended next steps
+
+Also emit the JSON + SARIF siblings. Assemble the findings array per the shared schema
+(`context/references/findings-schema.md`; category = `deprecation` / `bc_break` /
+`magento_compat` / `php_compat`, severity per `context/references/severity.md`),
+write it to a temp file, then run `${CLAUDE_SKILL_DIR}/scripts/emit-report.sh` with
+`FINDINGS_FILE`, `TARGET_MODULE`, `TARGET_PATH`, `OUTPUT_BASENAME=<Vendor>_<Module>-<from>-to-<to>-<date>`,
+and `DOCS_ROOT=<output_root>`. It routes through the shared `context` hub emitter, so
+the JSON is schema-valid and the `.sarif` sibling feeds CI / GitHub Code Scanning like every
+other findings skill. (Previously an inline emitter wrote JSON only — no SARIF.)
+
+## Inputs
+
+```
+/upgrade --to-magento=2.4.7 --to-php=8.3 [--docs-root=<path>] <Vendor>_<Module>[,<Module>]
+```
+
+Flags:
+- `--to-magento=X.Y.Z`
+- `--to-php=X.Y`
+- `--scan-only` — Phases 0-2 only; no edits.
+- `--auto-fix` — Apply Rector without approval (Phase 3 skipped).
+- `--include-bc-breaks` — Attempt automated BC-break remediation.
+- `--docs-root=<path>` — output-root override; see "Output Root" below.
+
+## Outputs
+
+```
+{output_root}/upgrades/{Vendor}_{Module}-{from}-to-{to}-{date}.md
+{output_root}/upgrades/{Vendor}_{Module}-{from}-to-{to}-{date}.json
+{output_root}/upgrades/{Vendor}_{Module}-{from}-to-{to}-{date}.sarif
+{ctx.magento_root}/app/code/{Vendor}/{Module}/UPGRADE.md   # Consumer notice (always present after upgrade)
+```
+
+`{output_root}` (`.docs` by default, `{ctx.docs_root}`) is anchored at the project root,
+never under `{ctx.magento_root}`, `app/code`, or a module dir. See the **Artifact location**
+rule in `context/SKILL.md`.
+
+### Output root (`--docs-root`)
+
+This skill accepts `--docs-root=<path>` (see `context/references/artifact-layout.md`).
+The MD report is authored in-conversation and written under `<path>/upgrades/`; the JSON + SARIF
+are produced by `scripts/emit-report.sh`, which passes `DOCS_ROOT=<path>` to the shared
+`context` hub emitter so both land under `<path>/upgrades/`. When unset they default to
+`{ctx.docs_root}/upgrades/`. Orchestrators such as `feature` pass this to
+collect a run's artifacts under one folder.
+
+## Reference Files
+
+- `references/magento-version-matrix.md` — known BC breaks by Magento version.
+- `references/php-version-matrix.md` — known BC breaks by PHP version.
+- `references/deprecation-map.md` — deprecated → replacement API mapping.
+- `references/rector-rule-sets.md` — Rector sets by Magento version.
+- `references/bc-break-notification.md` — how to write UPGRADE.md entries.
+- `references/scanner-tools.md` — tool probe catalogue.
+- `${CLAUDE_SKILL_DIR}/scripts/emit-report.sh` — emits the findings JSON + SARIF via the shared
+  `context` hub emitter (`emit-findings.sh`).
+- `context/references/severity.md` — shared five-point severity scale for findings.
+- `context/references/findings-schema.md` — JSON findings-document structure and the
+  `outputKind` enum (`upgrade` for this skill).
+
+## Templates
+
+- `templates/upgrade-md.md` — module-level UPGRADE.md
+- `templates/report.md` — upgrade report
+
+## Edge Cases
+
+| Case | Behaviour |
+|------|-----------|
+| Module has no tests | Phase 5 invokes `test-generate` to generate a smoke test before applying changes; subsequent fixes are validated against it. |
+| Rector rule set isn't available | Skip auto-fix; report all findings as manual-fixable. |
+| Module composer.json constraints can't accept the target Magento version | Phase 1 stops; user must accept a multi-target strategy or narrow scope. |
+| Multi-module upgrade where modules depend on each other | Order topologically; one report per module; share an UPGRADE.md preface. |
+
+## Related Skills
+
+| Phase | Skill |
+|-------|-------|
+| 0 | `context` |
+| 5 | `test-generate` (when coverage gaps prevent safe upgrade) |
+| 6 | `review --diff` |

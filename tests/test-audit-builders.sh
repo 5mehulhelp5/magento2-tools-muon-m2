@@ -88,12 +88,12 @@ PY
 DATE="$(date -u +%Y-%m-%d)"
 FAIL=0
 
-run_builder magento2-security-audit "magento2-security-audit" "security" "Acme_Test-security-${DATE}" || FAIL=1
-run_builder magento2-performance-audit "magento2-performance-audit" "performance" "Acme_Test-perf-${DATE}" || FAIL=1
-run_builder magento2-static-analysis "magento2-static-analysis" "quality" "Acme_Test-quality-${DATE}" || FAIL=1
-run_builder magento2-marketplace-prep "magento2-marketplace-prep" "marketplace" "Acme_Test-readiness-${DATE}" || FAIL=1
-run_builder magento2-accessibility-audit "magento2-accessibility-audit" "accessibility" "Acme_Test-a11y-${DATE}" || FAIL=1
-run_builder magento2-breeze-compat-audit "magento2-breeze-compat-audit" "compatibility" "Acme_Test-breeze-compat-${DATE}" || FAIL=1
+run_builder security "security" "security" "Acme_Test-security-${DATE}" || FAIL=1
+run_builder perf-audit "perf-audit" "performance" "Acme_Test-perf-${DATE}" || FAIL=1
+run_builder lint "lint" "quality" "Acme_Test-quality-${DATE}" || FAIL=1
+run_builder marketplace "marketplace" "marketplace" "Acme_Test-readiness-${DATE}" || FAIL=1
+run_builder a11y-audit "a11y-audit" "accessibility" "Acme_Test-a11y-${DATE}" || FAIL=1
+run_builder breeze-compat "breeze-compat" "compatibility" "Acme_Test-breeze-compat-${DATE}" || FAIL=1
 
 # DOCS_ROOT redirect: with DOCS_ROOT set and no OUTPUT_DIR, output must land under
 # {DOCS_ROOT}/{category}, not .docs/{category}.
@@ -111,10 +111,10 @@ redirect_check() { # skill category basename
     return 0
 }
 
-redirect_check magento2-security-audit      audits         "Acme_Test-security-${DATE}"  || FAIL=1
-redirect_check magento2-static-analysis     quality        "Acme_Test-quality-${DATE}"   || FAIL=1
-redirect_check magento2-marketplace-prep    marketplace    "Acme_Test-readiness-${DATE}" || FAIL=1
-redirect_check magento2-accessibility-audit accessibility  "Acme_Test-a11y-${DATE}"      || FAIL=1
+redirect_check security      audits         "Acme_Test-security-${DATE}"  || FAIL=1
+redirect_check lint     quality        "Acme_Test-quality-${DATE}"   || FAIL=1
+redirect_check marketplace    marketplace    "Acme_Test-readiness-${DATE}" || FAIL=1
+redirect_check a11y-audit accessibility  "Acme_Test-a11y-${DATE}"      || FAIL=1
 
 cd "$OLDPWD"
 exit "$FAIL"

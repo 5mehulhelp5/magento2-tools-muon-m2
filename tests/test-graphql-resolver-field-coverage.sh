@@ -13,7 +13,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-TPL="skills/magento2-graphql-create/templates"
+TPL="skills/graphql/templates"
 SCHEMA="$TPL/schema-fragment.graphqls"
 if [ ! -f "$SCHEMA" ]; then
     echo "skip: graphql schema fragment not found at $SCHEMA"

@@ -12,8 +12,8 @@
 
 DA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DA_FIXTURE="$DA_ROOT/tests/fixtures/docs-generate/Acme/Sample"
-DA_EXTRACT="$DA_ROOT/skills/magento2-docs-generate/scripts/extract-surface.sh"
-DA_EMIT="$DA_ROOT/skills/magento2-docs-generate/scripts/emit-api-artifacts.sh"
+DA_EXTRACT="$DA_ROOT/skills/docs/scripts/extract-surface.sh"
+DA_EMIT="$DA_ROOT/skills/docs/scripts/emit-api-artifacts.sh"
 
 docs_api_workdir() {
     DA_WORK="$(mktemp -d)"

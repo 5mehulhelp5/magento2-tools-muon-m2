@@ -8,7 +8,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 FAIL=0
-for tpl in skills/magento2-eav-attribute/templates/eav-add-*-patch.php; do
+for tpl in skills/eav-attribute/templates/eav-add-*-patch.php; do
     [ -f "$tpl" ] || continue
 
     # Idempotency: getAttribute() before addAttribute().
