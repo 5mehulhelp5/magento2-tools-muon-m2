@@ -15,7 +15,8 @@ emitters (JSON/SARIF) that every findings-emitting skill reuses.
 graph TD
     CTX[context<br/>hub: vendor, runner, CLI, versions, theme, tools<br/>+ shared JSON/SARIF emitters]
 
-    FI[feature<br/>orchestrator]
+    FI[feature<br/>orchestrator: builds]
+    AUD[audit<br/>orchestrator: inspects]
     BF[fix]
     MC[module-create]
     MR[review]
@@ -33,6 +34,7 @@ graph TD
     I18N[i18n]
 
     FI --> MC & MR & TG & EAV & GQL & FE & DM & DEP & BF & DBG & SEC & PERF
+    AUD --> MR & SEC & PERF
     BF --> MR & DEP & DM & DBG
     MC --> MR
     UPG --> MR & TG
@@ -48,6 +50,7 @@ graph TD
     MC -.-> CTX
     MR -.-> CTX
     FI -.-> CTX
+    AUD -.-> CTX
     BF -.-> CTX
     DEP -.-> CTX
     UPG -.-> CTX
@@ -64,10 +67,19 @@ graph TD
 ```
 
 Dotted edges: context resolution (all skills). Solid edges: workflow delegation.
+Only the skills with cross-skill edges are drawn; `audit` additionally dispatches `lint`,
+`a11y-audit`, `marketplace`, and `breeze-compat` where the module's surface warrants them,
+and the generator skills (`webapi`, `admin-form`, `admin-listing`, `system-config`,
+`cli-command`, `extension-point`, `message-queue`, `indexer`, `docs`, the `breeze-*`
+trio) all resolve through `context` and hand their output to `review`. The full graph is
+in the [repository README](../README.md).
+
+There are two orchestrators, and they are counterparts: `feature` **builds**, `audit`
+**inspects**.
 
 ### Shared infrastructure
 
-Four pieces keep the 33 skills consistent:
+Five pieces keep the 33 skills consistent:
 
 1. **The context document.** One JSON object (cached at
    `.claude/.cache/context.json`) holding vendor, layout, edition, versions,
@@ -77,9 +89,13 @@ Four pieces keep the 33 skills consistent:
 2. **The findings schema and severity scale.**
    `skills/context/references/findings-schema.md` and
    `skills/context/references/severity.md` define
-   one finding shape and one Critical/High/Medium/Low/Info scale. Review, security
-   audit, performance audit, and module upgrade all emit it, through the shared
-   `emit-json.sh` / `emit-sarif.sh` scripts owned by `review`.
+   one finding shape and one Critical/High/Medium/Low/Info scale. `review`, `security`,
+   `perf-audit`, `lint`, `marketplace`, `a11y-audit`, `breeze-compat`, `upgrade`, and
+   `audit` all emit it. Scripted scanners funnel through one shared engine,
+   `context/scripts/findings-lib.sh` (scanner execution with JSON validation, per-scanner
+   stderr capture into `scanner_errors`, findings merge), and out through the shared
+   `emit-findings.sh` → `emit-json.sh` / `emit-sarif.sh` scripts — all owned by
+   `context`.
 3. **The `.docs/` artifact convention.** Every skill writes its durable outputs to a
    predictable folder in *your* project (see [artifact map](#artifact-map)).
 4. **Naming and placeholders.** `skills/context/references/naming.md` is the
@@ -172,7 +188,7 @@ flowchart TD
     P3[Phase 3 — RCA<br/>defect file:line, why, fix plan] --> G{Gate:<br/>RCA approved?}
     G -->|approved| P4
     P4[Phase 4 — TDD patch<br/>RED failing test → GREEN minimal patch → REFACTOR] --> P5
-    P5[Phase 5 — Review<br/>module-review --diff; fix new Crit/High] --> P6
+    P5[Phase 5 — Review<br/>review --diff; fix new Crit/High] --> P6
     P6[Phase 6 — Deploy<br/>optional, user-authorized<br/>re-run reproduction after] --> P7
     P7[Phase 7 — Report + severity class]
 ```
@@ -186,7 +202,7 @@ Redirects: schema changes → `feature --mode=extend`; data repairs →
 idempotent patch via `data-migration` (stays in-skill); hard-to-reproduce
 investigation → `debug`.
 
-The red → green → refactor loop bug-fix applies is the shared
+The red → green → refactor loop `fix` applies is the shared
 `context/references/tdd-discipline.md` — the same discipline the test-first
 builders below use.
 
@@ -299,7 +315,10 @@ respected.
 ## Audit pipeline (security + performance)
 
 Both audits share one output pipeline: scanners → `build-findings.sh` → shared
-`emit-json.sh` + `emit-sarif.sh` → Markdown narrative written by the skill.
+`emit-json.sh` + `emit-sarif.sh` → Markdown narrative written by the skill. Each skill's
+`build-findings.sh` is a thin wrapper over the single engine
+`context/scripts/findings-lib.sh`, so scanner execution, JSON validation, `scanner_errors`
+capture, and the merge behave identically across every findings skill.
 
 ```mermaid
 flowchart LR
@@ -317,7 +336,7 @@ flowchart LR
     end
     S2 & S3 & S4 & S5 & S6 --> BF1[build-findings.sh]
     T2 & T3 & T4 --> BF2[build-findings.sh]
-    BF1 & BF2 --> EMIT[shared emit-json.sh + emit-sarif.sh<br/>owned by review]
+    BF1 & BF2 --> EMIT[shared emit-json.sh + emit-sarif.sh<br/>owned by context]
     EMIT --> OUT[.docs/audits/*.json + *.sarif<br/>+ Markdown narrative]
 ```
 
@@ -344,7 +363,12 @@ Where each skill stops and waits for you:
 | `upgrade` | Scan report before applying (skipped by `--auto-fix`) | "proceed" |
 | `deploy` | Plan before execution (skipped by `--auto`, never on production); production interactive confirm; prod snapshot prompt | "proceed"; `--i-know-what-im-doing` for auto+prod |
 | `release` | Push/tag | literally typing `release` |
-| `review`, `debug`, audits, `i18n` | none — read-only or additive-report skills | — |
+| `audit` | none for the analysis itself; fanning the dimensions out to subagents is opt-in authorization, exactly as `review`'s parallel mode is | `--agents`, or `execution_mode` in `.claude/m2.json` |
+| `review`, `debug`, the specialist audits, `i18n` | none — read-only or additive-report skills | — |
+
+Approval gates **always run in the main conversation**. Neither execution mode delegates
+a gate to a subagent — see
+[Configuration → Execution modes](configuration.md#execution-modes-agents-vs-inline).
 
 ---
 
@@ -354,23 +378,39 @@ Everything durable lands under `.docs/` in your project:
 
 ```
 .docs/
-├── {FeatureName}/                      # feature-implement: blueprint.md, plan.md,
+├── {FeatureName}/                      # feature: blueprint.md, plan.md,
 │   ├── blueprint.md                    #   tasks.md or tasks/, report.md,
 │   ├── plan.md                         #   guides/*.html, user-docs/*.html, spec.md
-│   └── ...
-├── bug-fixes/{slug}/                   # bug-fix: collect.md, reproduction.md, rca.md, report.md
-├── deployments/{ts}-{env}.md|.json     # deploy reports (+ .snapshot.tar.gz)
-├── reviews/{Module}-review-{date}.json # module-review JSON (+ .sarif)
-├── audits/security-{scope}-{date}.*    # security audit .md/.json/.sarif
-├── audits/perf-{scope}-{date}.*        # performance audit .md/.json/.sarif
-├── upgrades/{Module}-{from}-to-{to}-{date}.md|.json
-├── tests/{Module}-coverage-{date}.md   # test-generate coverage report
+│   └── ...                             #   (sub-skill output nests under this root too)
+├── spikes/{slug}/                      # feature --mode=spike
+├── bug-fixes/{slug}/                   # fix: collect.md, reproduction.md, rca.md, report.md
+├── deployments/{ts}-{env}.md|.json     # deploy reports (+ .snapshot.tar.gz, -preflight.json)
+├── reviews/{Vendor}_{Module}-review-{date}.*      # review .md/.json/.sarif
+├── audits/{Vendor}_{Module}-audit-{date}.*        # audit: consolidated + merged SARIF
+├── audits/security-{scope}-{date}.*               # security .md/.json/.sarif
+├── audits/perf-{scope}-{date}.*                   # perf-audit .md/.json/.sarif
+├── quality/{Vendor}_{Module}-quality-{date}.*     # lint .md/.json/.sarif
+├── accessibility/{Vendor}_{Module}-a11y-{date}.*  # a11y-audit .md/.json/.sarif
+├── marketplace/{Vendor}_{Module}-readiness-{date}.*   # marketplace readiness
+├── breeze-compat/{Vendor}_{Module}-breeze-compat-{date}.*
+├── upgrades/{Vendor}_{Module}-upgrade-{date}.md|.json
+├── tests/{Vendor}_{Module}-coverage-{date}.md     # test-generate coverage report
+├── docs-generated/{Vendor}_{Module}-{date}.md     # docs run report
 ├── eav-attributes/{Module}-{code}-{date}.md
 ├── migrations/{name}-{date}.md
 ├── i18n/{Module}-{date}.md
-├── debug/{mode}-{date}.md              # only with --save
-└── releases/{Module}-{Version}.md      # release notes
+├── debug/snapshot-{date}.md            # only with --save
+├── releases/{Module}-{Version}.md      # release notes
+└── …                                   # one run-report dir per generator skill:
+                                        #   adminhtml-forms/, adminhtml-listings/,
+                                        #   cli-commands/, extension-points/, indexers/,
+                                        #   message-queues/, system-config/
 ```
+
+Every path above is a *category* directory appended to the run's **output root** —
+`.docs` by default, or whatever `--docs-root={path}` sets. The authoritative registry of
+category names and filename tokens is
+`skills/context/references/artifact-layout.md`.
 
 Code artifacts go where Magento expects them: modules under
 `{magento_root}/app/code/{Vendor}/`, themes under `app/design/frontend/{Vendor}/`,

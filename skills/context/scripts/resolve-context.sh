@@ -156,6 +156,39 @@ fi
 MODULE_DIR="${MAGENTO_ROOT}/app/code"
 [[ "$MAGENTO_ROOT" == "." ]] && MODULE_DIR="app/code"
 
+# --- Execution mode (project preference) ---
+# Which analysis shape the findings/RCA family uses by default: parallel read-only
+# subagents ("agents") or sequential in-conversation ("inline"). Lives in the plugin's own
+# override file next to magento_root/php_container — NOT in Claude Code's settings.json,
+# which this plugin never parses and which silently accepts any key (so a typo there would
+# fail without a single diagnostic). Precedence: a per-run --agents/--inline flag beats
+# this; this beats the per-skill default.
+#
+# Only the two contract values are accepted. Anything else resolves to null — an
+# unrecognised mode is an honest gap, never a silently invented execution shape.
+EXECUTION_MODE=""
+EXECUTION_MODE_SRC=""
+if [[ -f ".claude/m2.json" ]] && command -v python3 >/dev/null 2>&1; then
+    raw_mode=$(python3 -c "
+import json
+try:
+    v = json.load(open('.claude/m2.json')).get('execution_mode')
+except Exception:
+    v = None
+print(v if isinstance(v, str) else '')
+" 2>/dev/null || echo "")
+    case "$raw_mode" in
+        agents|inline)
+            EXECUTION_MODE="$raw_mode"
+            EXECUTION_MODE_SRC=".claude/m2.json:execution_mode"
+            ;;
+        "") ;;
+        *)
+            EXECUTION_MODE_SRC="unresolved: .claude/m2.json \"execution_mode\" is \"${raw_mode}\"; expected \"agents\" or \"inline\""
+            ;;
+    esac
+fi
+
 # --- Vendor resolution ---
 VENDOR=""
 VENDOR_SRC=""
@@ -862,7 +895,7 @@ cat > "$CACHE_TMP" <<EOF
 {
   "schemaVersion": "1.0",
   "skill": "context",
-  "skillVersion": "1.13.0",
+  "skillVersion": "1.14.0",
   "resolvedAt": "${TIMESTAMP}",
   "cacheKey": $(json_or_null "$CACHE_KEY"),
 
@@ -873,6 +906,7 @@ cat > "$CACHE_TMP" <<EOF
   "magento_root": "${MAGENTO_ROOT}",
   "module_dir": "${MODULE_DIR}",
   "docs_root": ".docs",
+  "execution_mode": $(json_or_null "$EXECUTION_MODE"),
   "edition": $(json_or_null "$EDITION"),
   "magento_version": $(json_or_null "$MAGENTO_VERSION"),
   "distribution_version": $(json_or_null "$DISTRIBUTION_VERSION"),
@@ -931,6 +965,7 @@ cat > "$CACHE_TMP" <<EOF
     "distribution_version": $(json_or_null "$DISTRIBUTION_VERSION_SRC"),
     "b2b_version": $(json_or_null "$B2B_VERSION_SRC"),
     "php_version": $(json_or_null "$PHP_VERSION_SRC"),
+    "execution_mode": $(json_or_null "$EXECUTION_MODE_SRC"),
     "theme.frontend": $(json_or_null "$THEME_FRONTEND_SRC"),
     "theme.adminhtml": $(json_or_null "$THEME_ADMIN_SRC")
   }

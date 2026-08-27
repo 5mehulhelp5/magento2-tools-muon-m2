@@ -199,6 +199,6 @@ one module per release invocation.
 - [ ] Quality tools installed as the project matures (`phpcs` + `magento/magento-coding-standard`, `phpstan`, `phpunit`) — skills use them automatically once present
 - [ ] CI: `--validate-only` deploy gate + SARIF upload
 - [ ] Conventional commits adopted
-- [ ] Decide on test-first: set `Feature implement: tdd = on` in `CLAUDE.md` to make feature behaviour test-first by default (bug-fix / EAV / data patches already are)
+- [ ] Decide on test-first: set `Feature implement: tdd = on` in `CLAUDE.md` to make feature behaviour test-first by default (`fix` / `eav-attribute` / data patches already are)
 - [ ] Decide whether `.docs/` (skill reports) is committed or ignored — committing it
       gives the team a shared history of blueprints, RCAs, deploys, and audits

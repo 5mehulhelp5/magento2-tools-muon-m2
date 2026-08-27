@@ -110,8 +110,9 @@ Produce three deliverables:
 
 ## Execution Mode
 
-Default: **inline**. In `agents` mode (`--agents` flag, or the project `m2.executionMode`
-setting — selection contract in `context/references/execution-modes.md`) the judgement
+Default: **inline**. In `agents` mode (`--agents` flag, or `execution_mode` in
+`.claude/m2.json` surfaced as `{ctx.execution_mode}` — selection contract in
+`context/references/execution-modes.md`) the judgement
 passes of this skill are dispatched to the read-only `reviewer` agent with a marketplace-readiness
 dimension brief, and this skill owns synthesis. The scripted scanners
 (`scripts/build-findings.sh`) are deterministic and run identically in both modes.

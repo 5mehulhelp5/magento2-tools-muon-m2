@@ -16,13 +16,30 @@ work runs — the same references, checklists, and findings schema apply either 
 
 1. **Per run** — `--agents` or `--inline` on the invocation, or plain language
    ("in one flow", "without subagents", "use parallel agents", "delegate").
-2. **Per project** — `m2.executionMode` (`"agents"` | `"inline"`) in the project's
-   `.claude/settings.json`. Read it directly from the file; absence means no preference.
+2. **Per project** — `execution_mode` (`"agents"` | `"inline"`) in `.claude/m2.json`,
+   the plugin's own override file:
+
+   ```json
+   { "execution_mode": "agents" }
+   ```
+
+   Do **not** read this from Claude Code's `.claude/settings.json`. That file is not
+   parsed by this plugin, and Claude Code accepts unknown keys there silently — a typo
+   would fail without a single diagnostic. `m2.json` is resolved by
+   `context/scripts/resolve-context.sh` alongside `magento_root` / `php_container`, so
+   the value arrives as the context field `{ctx.execution_mode}` (with its origin in
+   `{ctx.resolution_source.execution_mode}`). Read it from the context document you
+   already resolved in Phase 0 — never re-read the file yourself.
+
+   `null` means no project preference. A value that is neither `agents` nor `inline`
+   also resolves to `null`, with the reason recorded in `resolution_source` — an
+   unrecognised mode is an honest gap, never a silently invented execution shape.
 3. **Per-skill default** — `audit` defaults to `agents` (its whole point is the
    fan-out); every other consumer defaults to `inline`.
 
-State the chosen mode (and what chose it: flag, setting, or default) in the run header
-of the report.
+State the chosen mode (and what chose it: flag, `m2.json`, or default) in the run header
+of the report. When `resolution_source.execution_mode` records an unresolved value, say
+so there too rather than silently falling through to the default.
 
 ## Invariants — identical in both modes
 

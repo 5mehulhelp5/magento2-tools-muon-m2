@@ -5,9 +5,23 @@ outputs, and related skills. For narrative flow descriptions see
 [Flows and scenarios](flows-and-scenarios.md); for recipes see
 [Daily workflows](daily-workflows.md).
 
-All skills are invoked namespaced (`/magento2-tools:magento2-<skill>`) or by plain
-language matching the skill's purpose. Every skill resolves project context through
-`context` first (Phase 0) — that is omitted from the phase lists below.
+All skills are invoked namespaced (`magento2-tools:<skill>`) or by plain
+language matching the skill's purpose. Sixteen of them also have a shorter slash-command
+alias — see the command table in the [repository README](../README.md#commands) (the
+names differ for a few: `/magento2-tools:bugfix` → `fix`, `/magento2-tools:snapshot` →
+`debug`, `/magento2-tools:perf` → `perf-audit`, `/magento2-tools:test` →
+`test-generate`, `/magento2-tools:scaffold` → `module-create`).
+
+Every skill resolves project context through `context` first (Phase 0) — that is omitted
+from the phase lists below.
+
+**Execution mode.** The findings/RCA family — `audit`, `review`, `security`,
+`perf-audit`, `a11y-audit`, `marketplace`, and `fix` — accepts `--agents` or `--inline`
+on any invocation, with a per-project default from `"execution_mode"` in
+`.claude/m2.json`. See [Configuration](configuration.md#execution-modes-agents-vs-inline).
+
+**Output root.** Every artifact-producing skill accepts `--docs-root={path}` to relocate
+its output from `.docs/` (see [Configuration](configuration.md#output-conventions)).
 
 ---
 
@@ -21,15 +35,17 @@ and available quality tools into one JSON document. Consumed by every other skil
 rarely invoked directly.
 
 - **Invocation:** automatic from other skills; directly: *"resolve the Magento context"*; `--no-cache` forces re-resolution.
-- **Cache:** `.claude/.cache/context.json`, keyed by `composer.lock` +
-  `composer.json` + `CLAUDE.md` hashes; default TTL 24h (`M2_CACHE_TTL`).
+- **Cache:** `.claude/.cache/context.json`, keyed by the `composer.lock`,
+  `composer.json`, `CLAUDE.md`, and `.claude/m2.json` hashes plus the `M2_*` env
+  overrides — so changing any override busts it; default TTL 24h (`M2_CACHE_TTL`).
 - **Honest gaps:** missing tools are `null`; `runner` is `""` for bare PHP,
-  `runner_kind` is `null` only when no PHP environment exists at all.
+  `runner_kind` is `null` only when no PHP environment exists at all; an unrecognised
+  `execution_mode` is `null` with the reason in `resolution_source`.
 - **Also owns the shared references:** naming conventions, severity scale, findings
   schema (JSON/SARIF), placeholder registry, skill version registry, and the shared
   **test-first (TDD) discipline** (`references/tdd-discipline.md` — the red → green →
-  refactor loop and the behaviour/boilerplate line, consumed by bug-fix,
-  feature-implement, data-migration, and eav-attribute).
+  refactor loop and the behaviour/boilerplate line, consumed by `fix`,
+  `feature`, `data-migration`, and `eav-attribute`).
 - **Scripts:** `scripts/resolve-context.sh` (emit JSON without an LLM pass),
   `scripts/probe-tools.sh`.
 
@@ -87,7 +103,7 @@ batch resolvers (N+1 prevention). Appends to existing `schema.graphqls`, never r
 - **Outputs:** `etc/schema.graphqls`, `etc/graphql/di.xml`, `Model/Resolver/…`,
   resolver unit tests.
 - **Related:** tests via `test-generate`; reviewed with
-  `review --diff`; called by feature-implement (G* tasks).
+  `review --diff`; called by `feature` (G* tasks).
 
 ### webapi
 
@@ -106,7 +122,7 @@ first); appends to existing `webapi.xml`/`di.xml`/`acl.xml` rather than overwrit
 - **Outputs:** `etc/webapi.xml`, `etc/di.xml`, `etc/acl.xml`, `Api/…`, `Model/{Entity}Repository.php`,
   `Test/Api/…`.
 - **Related:** tests via `test-generate --types=api`; reviewed with
-  `review --diff`; called by feature-implement (API tasks).
+  `review --diff`; called by `feature` (API tasks).
 
 ### frontend
 
@@ -223,8 +239,8 @@ emitters owned by the `context` hub.
 - **Severity:** Critical / High / Medium / Low / Info; every finding carries impact,
   evidence (`file:line`), recommendation, verification.
 - **Outputs:** Markdown (or HTML); JSON
-  `.docs/reviews/{Module}-review-{date}.json` + SARIF sibling.
-- **Related:** called by create/feature/bug-fix/upgrade after every change.
+  `.docs/reviews/{Vendor}_{Module}-review-{date}.json` + SARIF sibling.
+- **Related:** called by `module-create` / `feature` / `fix` / `upgrade` after every change.
 
 ### test-generate
 
@@ -232,7 +248,7 @@ Discovers coverage gaps and generates unit / integration / REST+GraphQL API / Ja
 MFTF tests with real assertions. Purely additive — never modifies source. It is the
 **backfiller** for code that already exists (including modules with *no* tests); for
 *new* behaviour the owning skill writes the test first (see `context`'s
-`tdd-discipline.md`), and under feature-implement TDD mode this skill tops up coverage
+`tdd-discipline.md`), and under `feature`'s TDD mode this skill tops up coverage
 on exempt/boilerplate classes rather than authoring the first behaviour test.
 
 - **Invocation:** `[--types=unit,integration,api,js,mftf] [--target-coverage=80]
@@ -241,13 +257,13 @@ on exempt/boilerplate classes rather than authoring the first behaviour test.
   templates → verify (`php -l`, `node --check`, `xmllint`; unit tests *run* and fixed)
   → report.
 - **Outputs:** tests under the module's `Test/` tree;
-  `.docs/tests/{Module}-coverage-{date}.md`.
-- **Related:** called by feature-implement (T*/6A), module-upgrade (Phase 5),
+  `.docs/tests/{Vendor}_{Module}-coverage-{date}.md`.
+- **Related:** called by `feature` (T*/6A), `upgrade` (Phase 5),
   graphql.
 
 ### security
 
-Site-wide/per-module security audit beyond module-review: dependency CVEs (`composer
+Site-wide/per-module security audit beyond `review`: dependency CVEs (`composer
 audit`, live; Adobe patch-state via `vendor/bin/patch-status`), secret scanning
 (gitleaks/trufflehog/regex fallback), Magento static patterns, Magento coding standard,
 cross-module collisions. Never asks for production secrets.
@@ -336,8 +352,8 @@ chain), `di` (graph for a type), `slow-queries` (pattern-grouped with index hint
 - **Invocation:** `/magento2-tools:debug <mode> [--since=…] [--module=…]
   [--format=…] [--save]`.
 - **Outputs:** Markdown in conversation; `.docs/debug/{mode}-{date}.md` with `--save`.
-- **Related:** routes follow-ups to bug-fix / performance-audit / security-audit; used
-  by feature-implement smoke triage.
+- **Related:** routes follow-ups to `fix` / `perf-audit` / `security`; used
+  by `feature` smoke triage.
 
 ---
 
@@ -362,8 +378,8 @@ Resumable via `.docs/{FeatureName}/plan.md` checkboxes.
 - **Outputs:** `.docs/{FeatureName}/` — blueprint, plan, task records, smoke reports,
   final report, optional HTML guides.
 - **Related:** delegates to nearly every other skill; smoke findings auto-route to
-  bug-fix / debug / performance-audit / security-audit / frontend-create /
-  data-migration.
+  `fix` / `debug` / `perf-audit` / `security` / `frontend` /
+  `data-migration`.
 
 ### fix
 
@@ -374,7 +390,7 @@ never edited, per-phase `[bug-fix]` commits on a `bugfix/{slug}` branch, never p
 - **Invocation:** `"<bug description>"` + optional `--module=`, `--log=`, `--no-deploy`,
   `--severity=`.
 - **Outputs:** `.docs/bug-fixes/{slug}/` — collect, reproduction, rca, report.
-- **Redirects:** schema changes → feature-implement `extend` mode; data repairs →
+- **Redirects:** schema changes → `feature` `--mode=extend`; data repairs →
   data-migration patch; investigation → debug.
 
 ### deploy
@@ -388,7 +404,7 @@ di:compile/static-deploy; snapshot offered (use `--include-db` for non-lossy
 - **Invocation:** `[--env=local|staging|production] [--strict] [--auto] [--snapshot]
   [--full] [--validate-only] [--i-know-what-im-doing] <modules>…`.
 - **Outputs:** `.docs/deployments/{ts}-{env}.md|.json` (+ snapshot tarball).
-- **Related:** called by feature-implement (D*), bug-fix (Phase 6), module-upgrade,
+- **Related:** called by `feature` (D*), `fix` (Phase 6), `upgrade`,
   release (`--validate-only --strict`).
 
 ### upgrade

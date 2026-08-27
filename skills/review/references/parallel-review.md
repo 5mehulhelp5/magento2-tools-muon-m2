@@ -1,7 +1,7 @@
 # Parallel Review
 
 Use parallel subagents only when `agents` mode is selected — by a `--agents` flag, plain
-language ("use parallel agents", "delegate"), or the project's `m2.executionMode` setting
+language ("use parallel agents", "delegate"), or `execution_mode` in `.claude/m2.json` (`{ctx.execution_mode}`)
 (`context/references/execution-modes.md` is the selection contract). Parallel review is
 useful for large modules, security-sensitive modules, or modules with many independent
 surfaces. It is not required for small modules.

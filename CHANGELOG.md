@@ -6,7 +6,7 @@ individual skill versions are tracked in each SKILL.md frontmatter and the gener
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [2.0.0] — 2026-08-23 — live security sources, one findings engine, short names
+## [2.0.0] — 2026-08-27 — live security sources, one findings engine, short names
 
 The 1.x line accumulated three kinds of weight this release removes. A hand-curated CVE
 registry (196 KB of YAML, a private parser, a refresh pipeline, and 28 tests guarding
@@ -76,11 +76,21 @@ to `.claude/.cache/context.json` (the old file is simply orphaned and regenerate
 ### Added — user-selectable execution modes
 
 - Every audit/RCA-family command accepts `--agents` / `--inline`, with a per-project
-  default via `m2.executionMode` in `.claude/settings.json`. `agents` fans analysis out
-  to the read-only `reviewer` / `explorer` subagents in parallel; `inline` runs the same
-  steps sequentially in the conversation. Skill defaults preserve 1.x behaviour
-  (`audit` fans out, everything else is inline). Approval gates never delegate.
+  default via `"execution_mode"` in `.claude/m2.json` — the plugin's own override file,
+  alongside `magento_root` / `php_container`. `agents` fans analysis out to the read-only
+  `reviewer` / `explorer` subagents in parallel; `inline` runs the same steps sequentially
+  in the conversation. Skill defaults preserve 1.x behaviour (`audit` fans out, everything
+  else is inline). Approval gates never delegate.
   Contract: `context/references/execution-modes.md`.
+- `context` resolves it: `execution_mode` is a top-level context field with an entry in
+  `resolution_source`, so the seven consumers read `{ctx.execution_mode}` from the Phase 0
+  document instead of each parsing a file. `m2.json` is already in the cache key, so
+  editing the mode busts the context cache. A value that is neither `agents` nor `inline`
+  resolves to `null` with the reason recorded — an unrecognised mode is an honest gap,
+  never a silently invented execution shape. It is deliberately **not** read from Claude
+  Code's `.claude/settings.json`: this plugin never parses that file, and Claude Code
+  accepts unknown keys there silently, so a setting placed there would do nothing with no
+  error to say so.
 - `/magento2-tools:docs` — the docs skill existed without a command.
 
 ### Changed — generated registries instead of hand-maintained tables
@@ -99,7 +109,47 @@ to `.claude/.cache/context.json` (the old file is simply orphaned and regenerate
 offline, stubbed advisories incl. the null-`cve` GHSA case, invalid JSON, patch-status
 verdicts/opt-out/broken/absent), `test-security-no-shipped-data.sh` (end-to-end offline
 degradation), `test-findings-lib-single-engine.sh`, `test-version-table-generated.sh`,
-`test-routing-generated.sh`, and `test-execution-modes.sh`. Suite: 75 tests, all green.
+`test-routing-generated.sh`, and `test-execution-modes.sh`.
+
+- `test-context-execution-mode.sh` (new): the resolver contract — absent file, absent
+  key, both valid modes, an unknown mode, a non-string value, `resolution_source`
+  attribution, cache-busting on edit, and a guard that no skill regrows a
+  `settings.json` read path.
+- `test-execution-modes.sh` extended: the canon must show the literal `.claude/m2.json`
+  shape — a dotted key name alone leaves a reader guessing between nested and flat — and
+  the resolver must emit the field.
+
+Suite: 76 tests, all green.
+
+### Documentation — `docs/` rewritten for 2.0
+
+The six guides under `docs/` were written against 1.x names and 1.x architecture. All of
+it now matches what ships.
+
+- **Names.** Every 1.x skill name (`feature-implement`, `module-review`,
+  `performance-audit`, `security-audit`, `accessibility-audit`, `module-upgrade`,
+  `frontend-create`) is gone from the guides, along with the invocation template
+  `magento2-tools:magento2-<skill>`, which resolves to nothing under the new naming.
+  `.docs/bug-fixes/` and the `[bug-fix]` commit prefix are deliberately unchanged — those
+  are real identifiers, not stale names.
+- **Ownership.** The shared findings emitters moved to `context` in this release;
+  `flows-and-scenarios.md` had them attributed to `review`, contradicting its own
+  architecture section two paragraphs earlier.
+- **The README dependency graph is rebuilt** from each skill's Related-Skills table, and
+  now states what an edge means. Three edges had been wrong in either direction:
+  `deploy ──► upgrade, release` was backwards (that is deploy's *caller* table), and
+  `perf-audit ──► review, security` and `security ──► review` were not delegation at all.
+  `feature`'s list named two skills it does not invoke and omitted seven it does. Fix
+  routing — a findings hand-off, not an invocation — is now listed separately instead of
+  being drawn as a dependency.
+- **Newly documented:** execution modes, `--docs-root` / `DOCS_ROOT`, the `audit` skill's
+  workflow recipe and its place in the architecture as `feature`'s inspect-counterpart,
+  `MAGENTO2_DEPLOY_NON_INTERACTIVE`, `M2_SMOKE_ADMIN_USER` / `M2_SMOKE_ADMIN_PASS`, and
+  the `Smoke admin user:` hint — including why there is deliberately no password
+  equivalent (`CLAUDE.md` is a committed file).
+- **The artifact map is complete**, having been missing `quality/`, `marketplace/`,
+  `accessibility/`, `breeze-compat/`, `docs-generated/`, `spikes/`, and the seven
+  generator run-report directories.
 
 ## [1.33.0] — 2026-08-21 — the REST surface was described only in prose
 

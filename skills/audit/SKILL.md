@@ -66,9 +66,9 @@ Present the chosen dimension set and any skipped dimensions with the reason.
 
 ## Execution Mode
 
-Default: **agents** — the fan-out below is this skill's whole point. `--inline` (or the
-project `m2.executionMode` setting; selection contract in
-`context/references/execution-modes.md`) runs the same dimensions sequentially in the
+Default: **agents** — the fan-out below is this skill's whole point. `--inline` (or
+`execution_mode` in `.claude/m2.json`, surfaced as `{ctx.execution_mode}`; selection
+contract in `context/references/execution-modes.md`) runs the same dimensions sequentially in the
 main conversation instead — same dimension set, same consolidation, same artifacts;
 slower, but every intermediate step is visible and steerable.
 

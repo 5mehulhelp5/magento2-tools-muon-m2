@@ -93,7 +93,7 @@ Developer documentation lives in [`docs/`](docs/README.md):
 | `release` | Version bump, changelog, tag, publish. |
 | `i18n` | Translation extraction / locale management. |
 | `admin-form` | Scaffold an adminhtml UI-component edit form (form XML + DataProvider + New/Edit/Save/Delete + button blocks). |
-| `admin-listing` | Scaffold an adminhtml grid/listing (listing XML + DataProvider + columns + actions + mass actions), paired with adminhtml-form. |
+| `admin-listing` | Scaffold an adminhtml grid/listing (listing XML + DataProvider + columns + actions + mass actions), paired with `admin-form`. |
 | `extension-point` | Wire behaviour onto an existing class: plugin (before/after/around interceptor), observer (events.xml + Observer), or preference. |
 | `system-config` | Add admin Stores → Configuration settings: system.xml + config.xml + ACL + optional source/backend models + typed Config reader. |
 | `cli-command` | Scaffold a bin/magento console command or cron job on an existing module: Symfony Command + CommandList registration, or crontab.xml + job class with a delegate service. |
@@ -106,60 +106,76 @@ Developer documentation lives in [`docs/`](docs/README.md):
 | `breeze-theme` | Scaffold a Swissup Breeze (Breezefront) child theme: theme.xml `Swissup/breeze-*` parent + registration.php + composer.json + `web/css/breeze/_default.less` (`@critical`) + breeze-only layout. |
 | `breeze-adapt` | Adapt an existing module to Breeze by generating a separate companion `{Vendor}_{Module}Breeze` module (breeze.js JS registration + `web/css/breeze` LESS + Cash `$.widget` stubs). Never edits the target. |
 | `breeze-compat` | Read-only static audit of a module's Breeze compatibility (RequireJS/Knockout/jQuery-widget/mixins). Emits ranked findings (JSON + SARIF, `outputKind=compatibility`) + a verdict. |
-| `audit` | Read-only release-readiness orchestrator: fans out every findings dimension (review + security + performance + static-analysis + accessibility + marketplace + breeze-compat) in parallel and consolidates them into ONE deduplicated, severity-ranked report + one merged SARIF (`outputKind=audit`). The *inspect* counterpart to `feature`. |
+| `audit` | Read-only release-readiness orchestrator: fans out every findings dimension (`review` + `security` + `perf-audit` + `lint` + `a11y-audit` + `marketplace` + `breeze-compat`) in parallel and consolidates them into ONE deduplicated, severity-ranked report + one merged SARIF (`outputKind=audit`). The *inspect* counterpart to `feature`. |
 
 ### Dependency graph
 
 `context` is the universal leaf — every other skill resolves environment through
 it and it depends on nothing. It also owns the shared findings emitters
-(`emit-findings.sh` → `emit-json.sh` / `emit-sarif.sh`) that every findings-emitting skill
-reuses. `feature` is the top orchestrator.
+(`emit-findings.sh` → `emit-json.sh` / `emit-sarif.sh`) and the single findings engine
+(`findings-lib.sh`) that every findings-emitting skill reuses. There are two
+orchestrators, and they are counterparts: `feature` **builds**, `audit` **inspects**.
+
+`A ──► B` means **A invokes B as part of its own workflow**. Callers are not listed as
+edges (`deploy` is invoked by four skills; it invokes only `context`), and neither is
+*fix routing* — where a read-only skill hands findings to the skill that owns the
+remediation. Routing is listed separately below.
 
 ```
-context  ◄── (called by all others; depends on nothing; owns the shared findings emitters)
+context           ◄── (called by all others; depends on nothing;
+                       owns the shared findings emitters + findings-lib.sh)
 
-feature ──► module-create, module-review, test-generate,
-                               eav-attribute, graphql-create, webapi-create,
-                               frontend-create, data-migration, adminhtml-form,
-                               extension-point, system-config, cli-command,
-                               message-queue, static-analysis, docs-generate,
-                               deploy, debug, security-audit, performance-audit,
-                               bug-fix
+feature           ──► module-create, review, deploy, test-generate, docs,
+                      eav-attribute, graphql, extension-point, system-config,
+                      cli-command, message-queue, lint          (Phase 5 task types)
+                      fix, debug, perf-audit, security, frontend,
+                      data-migration                            (Phase 6B smoke-fix routing)
 
-fix           ──► context, module-review, deploy, data-migration, debug
-deploy            ──► context, module-upgrade, release
-module-create     ──► context, module-review
-review     ──► context        (+ reuses context's emit-findings.sh)
-security    ──► context, module-review, module-upgrade
-perf-audit ──► context, module-review, security-audit
-eav-attribute     ──► context, module-create, module-review
-graphql    ──► context, module-create, module-review, test-generate
-webapi     ──► context, module-create, module-review, test-generate
-frontend   ──► context, module-create, module-review
-upgrade    ──► context, module-review, test-generate
-data-migration    ──► context, module-review
-test-generate     ──► context, module-create
+audit             ──► review, security, perf-audit, lint, a11y-audit,
+                      marketplace, breeze-compat   (fans out, then consolidates;
+                                                    reuses emit-findings.sh)
+
+fix               ──► context, review, deploy, data-migration, debug
+module-create     ──► context, docs, review
+review            ──► context                      (+ reuses emit-json/emit-sarif)
+test-generate     ──► context
+deploy            ──► context
+upgrade           ──► context, test-generate, review
 release           ──► context, deploy
 i18n              ──► context
-debug             ──► context, performance-audit, security-audit
-admin-form      ──► context, module-create, module-review, test-generate
-admin-listing   ──► context, module-create, module-review
-extension-point     ──► context, module-create, module-review
-system-config       ──► context, module-create, module-review
-cli-command         ──► context, module-create, module-review, system-config
-message-queue       ──► context, module-create, module-review
-indexer             ──► context, module-create, module-review
-lint     ──► context, module-review   (+ reuses context's emit-findings.sh)
-docs       ──► context
-marketplace    ──► context, module-review, security-audit   (+ reuses context's emit-findings.sh)
-a11y-audit ──► context, module-review   (+ reuses context's emit-findings.sh)
-breeze-theme  ──► context
-breeze-adapt ──► context, breeze-compat-audit
-breeze-compat ──► context, module-review   (+ reuses context's emit-findings.sh)
-audit               ──► context, module-review, security-audit, performance-audit,
-                                 static-analysis, accessibility-audit, marketplace-prep,
-                                 breeze-compat-audit   (consolidates their findings; reuses emit-findings.sh)
+docs              ──► context
+
+security          ──► context                      (+ reuses findings-lib.sh)
+perf-audit        ──► context                      (+ reuses findings-lib.sh)
+lint              ──► context                      (+ reuses findings-lib.sh)
+marketplace       ──► context, security            (+ reuses findings-lib.sh)
+a11y-audit        ──► context                      (+ reuses findings-lib.sh)
+breeze-compat     ──► context                      (+ reuses findings-lib.sh)
+debug             ──► context
+
+eav-attribute     ──► context
+data-migration    ──► context, review
+graphql           ──► context, review, test-generate
+webapi            ──► context, module-create, review, test-generate
+frontend          ──► context, review, breeze-theme, breeze-adapt, breeze-compat
+admin-form        ──► context, module-create, review, test-generate
+admin-listing     ──► context, module-create, review, test-generate
+system-config     ──► context, module-create, review, admin-form
+cli-command       ──► context, module-create, review, system-config
+extension-point   ──► context, module-create, review
+message-queue     ──► context, module-create, review
+indexer           ──► context, module-create, review, perf-audit
+breeze-theme      ──► context
+breeze-adapt      ──► context, breeze-compat
 ```
+
+**Fix routing** (findings hand-off, not invocation): `review` and `audit` route each
+finding to its owning skill — `fix` (behavioural/localised security defects), `feature`
+(`--mode=extend`, new behaviour or schema), `test-generate` (coverage gaps), `upgrade`
+(deprecations/BC breaks), `i18n`, `frontend`, `lint`, `data-migration`, `perf-audit`,
+`security`. `debug` routes to `fix` / `perf-audit` / `security`; `security` routes to
+`upgrade` on a CVE fix. When `review` runs in diff mode *on behalf of* `feature`, `fix`,
+or `upgrade`, it returns findings to that caller instead of routing.
 
 ## Commands
 
@@ -194,7 +210,7 @@ The `scaffold` dispatcher routes to `module-create` and guides generation to spe
 All arguments/flags are passed straight through to the skill, which is the source of truth for behaviour and gates.
 
 **Subagents or one flow — your choice.** The audit/RCA commands accept `--agents` /
-`--inline` (or set `m2.executionMode` in the project's `.claude/settings.json`): `agents`
+`--inline` (or set `"execution_mode"` in the project's `.claude/m2.json`): `agents`
 fans analysis out to the read-only `reviewer`/`explorer` subagents in parallel, `inline`
 runs the same steps sequentially in the conversation. Defaults preserve pre-2.0
 behaviour (`audit` fans out; everything else runs inline). Approval gates always run in

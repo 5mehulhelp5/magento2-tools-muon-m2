@@ -6,7 +6,7 @@ Skill versions:
   - upgrade@1.2.0
   - review@2.4.0
   - test-generate@1.2.1
-  - context@1.13.0
+  - context@1.14.0
 
 ## Scope
 

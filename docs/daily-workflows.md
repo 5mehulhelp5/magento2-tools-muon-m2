@@ -4,7 +4,7 @@ Recipe-style guide for using `magento2-tools` in routine development on an exist
 Magento 2 project. Each recipe describes the invocation, what happens, where you will be
 asked to approve, and what artifacts are left behind.
 
-Invocations are shown in their explicit form (`/magento2-tools:magento2-<skill> …`);
+Invocations are shown in their explicit form (`/magento2-tools:<skill> …`);
 plain-language requests trigger the same skills — *"fix this bug"*, *"review my
 changes"*, *"deploy these modules to staging"*.
 
@@ -28,6 +28,7 @@ changes"*, *"deploy these modules to staging"*.
 | Security audit | `security` | `--scope=site` |
 | Performance audit | `perf-audit` | `--scope=site` |
 | Cut a release | `release` | `/magento2-tools:release Acme_Checkout` |
+| Audit everything before a release | `audit` | `/magento2-tools:audit --release-readiness Acme_Checkout` |
 
 ---
 
@@ -155,8 +156,8 @@ when invoked from another skill — the SARIF uploads straight into GitHub Code 
 ```
 
 This skill is the **backfiller** for code that already exists — including modules with no
-tests at all. (For *new* behaviour, the owning skill writes the test first: bug-fix always,
-feature-implement under `--tdd`, and data-migration/eav-attribute by default. See
+tests at all. (For *new* behaviour, the owning skill writes the test first: `fix` always,
+`feature` under `--tdd`, and `data-migration`/`eav-attribute` by default. See
 [Flows and scenarios](flows-and-scenarios.md#test-first-builders-data-migration-eav-attribute).)
 
 Discovery first: `coverage-gap.sh` finds source classes without tests and surfaces
@@ -346,6 +347,29 @@ must type `release` to confirm**; anything else cancels. Optional GitHub Release
 ## Periodic hygiene
 
 Worth scheduling weekly or before every launch:
+
+**Everything at once** — the release-readiness pass:
+
+```
+/magento2-tools:audit --release-readiness Acme_Checkout
+```
+
+The umbrella over every audit below. It picks the dimensions the module's surface
+actually warrants (accessibility only where storefront templates exist, Breeze
+compatibility only under a Breeze theme, marketplace readiness only when you ask for it),
+runs them, and **consolidates** rather than concatenates: duplicates across dimensions
+collapse into one finding tagged with every dimension that raised it, keeping the highest
+severity, ending in a single `PASS` / `CONDITIONAL` / `FAIL` verdict and score. You get
+one report and one merged SARIF instead of seven to reconcile.
+
+Fanning the dimensions out to parallel read-only subagents is `audit`'s default and is
+opt-in authorization; `--inline` runs the same dimensions sequentially with identical
+consolidation and artifacts. Skipped dimensions are named in the report — an unrun
+dimension never reads as "clean".
+
+Output: `.docs/audits/{Vendor}_{Module}-audit-{date}.md|.json|.sarif`; each dimension's
+own artifacts stay under their usual category dirs. Reach for a single dimension's skill
+directly when you only want that one — the recipes below.
 
 **Security audit** — site-wide:
 

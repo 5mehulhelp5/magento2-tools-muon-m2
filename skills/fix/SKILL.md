@@ -121,8 +121,9 @@ Goal: locate the exact code line(s) responsible.
 
 1. Follow the stack trace from the entry point through the module(s). See
    `references/stack-trace-reading.md` for tips on plugin/observer/preference frames.
-   In `agents` mode (`--agents` flag or the project `m2.executionMode` setting —
-   selection contract in `context/references/execution-modes.md`), delegate this
+   In `agents` mode (`--agents` flag, or `execution_mode` in `.claude/m2.json`
+   surfaced as `{ctx.execution_mode}` — selection contract in
+   `context/references/execution-modes.md`), delegate this
    path-tracing to the read-only `explorer` agent and work from its comprehension map;
    default is **inline**. The RCA approval gate below always runs in the main
    conversation, in either mode.

@@ -174,7 +174,8 @@ Note explicitly which Tier 2 and 3 areas were skipped. If any Critical or High f
 
 ## Execution Mode
 
-Default: **inline**. `--agents` (or a project `m2.executionMode` setting) dispatches one
+Default: **inline**. `--agents` (or `execution_mode` in `.claude/m2.json`, surfaced as
+`{ctx.execution_mode}`) dispatches one
 read-only `reviewer` subagent per review dimension and this skill owns synthesis — the
 selection contract, precedence, and invariants are in
 `context/references/execution-modes.md`. Read `references/parallel-review.md` before

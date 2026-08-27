@@ -56,7 +56,7 @@ every teammate gets the plugin offered automatically on folder trust:
 ### Verify
 
 Run `/plugin` in Claude Code and confirm `magento2-tools@muon-m2` is installed and
-enabled. The skills are namespaced `magento2-tools:magento2-<skill>` — for example
+enabled. The skills are namespaced `magento2-tools:<skill>` — for example
 `magento2-tools:fix`.
 
 ## How you invoke skills

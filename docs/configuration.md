@@ -28,6 +28,7 @@ What gets resolved:
 | `magento_cli` / `composer` | Full `bin/magento` and composer invocations (null when unavailable — deploy aborts, others degrade) |
 | `theme.frontend` / `theme.adminhtml` | Active theme (Luma / Hyva / custom), with source; drives frontend scaffolding |
 | `tools.*` | Paths for phpcs, phpstan, phpunit, phpmd, rector, psalm, xmllint, semgrep, gitleaks, trufflehog, node, pa11y, … |
+| `execution_mode` | Project default for the findings/RCA family (`agents` / `inline` / `null`), from `.claude/m2.json` |
 
 ### Cache
 
@@ -51,14 +52,37 @@ Env vars win over `.claude/m2.json`:
 | `MAGENTO2_FI_PER_TASK_COMMITS` | unset | `1` enables per-task git commits in `feature`. |
 | `MAGENTO2_FI_TDD` | unset | `1` turns on **test-first (TDD) mode** in `feature`: behaviour-bearing `M*`/`X*` tasks are implemented test-first (write the failing test, watch it fail, then the minimal code). Off by default; `spike` mode always exempt. |
 | `MAGENTO2_SMOKE_NO_BROWSER` | unset | `1` forces **curl-only** smoke testing: REST and error-signal suites run in full, admin/storefront suites run a degraded curl reachability tier and emit a Medium coverage finding. Use in CI where no headless browser is installed. Lowest-priority of the explicit switches — outranked by a prompt directive, the `--no-browser` flag, and `CLAUDE.md`'s `Smoke browser: off`. |
+| `MAGENTO2_DEPLOY_NON_INTERACTIVE` | unset | `1` puts `deploy` in CI mode: approval prompts are skipped (pair it with `--auto`), production is still refused without `--i-know-what-im-doing`, JSON reports are emitted, and the run exits non-zero on any failure. |
+| `M2_SMOKE_ADMIN_USER` | unset | Admin username for the `feature` smoke battery's authenticated admin suite. Consulted after the `CLAUDE.md` `Smoke admin user:` line and before prompting. |
+| `M2_SMOKE_ADMIN_PASS` | unset | Admin password for the same suite. **Env or interactive prompt only** — the skills deliberately refuse to read a password from `CLAUDE.md`, which is a committed file. |
+| `DOCS_ROOT` | `.docs` | Output root for artifact-writing **scripts**. Skills take the same value as `--docs-root={path}`. Because env vars do not persist between a skill's Bash calls, it is passed explicitly per invocation rather than exported once. |
 
 ## `.claude/m2.json`
 
-Commit per-project overrides so the whole team shares them:
+The plugin's own override file. Commit it so the whole team shares the same settings:
 
 ```json
-{ "php_container": "my-php-container", "magento_root": "src" }
+{
+  "php_container": "my-php-container",
+  "magento_root": "src",
+  "execution_mode": "agents"
+}
 ```
+
+| Key | Effect |
+|-----|--------|
+| `php_container` | Name of the PHP container, when detection picks the wrong one or finds none |
+| `magento_root` | Magento root inside the repo (`.` or `src`) when the layout probe is wrong |
+| `execution_mode` | `"agents"` or `"inline"` — the project default for the findings/RCA family (see [Execution modes](#execution-modes-agents-vs-inline)) |
+
+All three are resolved by `context` and folded into its cache key, so editing this file
+takes effect on the next skill run without manual cache busting. An unrecognised
+`execution_mode` resolves to `null` with the reason recorded in `resolution_source`
+rather than being guessed at.
+
+> This is **not** Claude Code's `.claude/settings.json`. The plugin never parses that
+> file, and Claude Code accepts unknown keys in it silently — a plugin setting placed
+> there would do nothing, with no error to tell you.
 
 ## `CLAUDE.md` hints
 
@@ -66,13 +90,14 @@ Skills read your project's `CLAUDE.md` for these lines:
 
 | Line | Read by | Effect |
 |------|---------|--------|
-| `Vendor prefix: **Acme**` | context resolver (and feature-implement fallback) | Vendor for all generated namespaces, tables, ACLs, routes |
-| `Allow smoke on production: true` | feature-implement smoke runner | Permits Phase 6B smoke tests against a production base URL (refused otherwise) |
-| `Feature implement: per-task commits = on` | feature-implement | Same as `MAGENTO2_FI_PER_TASK_COMMITS=1` / `--per-task-commits` |
-| `Feature implement: tdd = on` | feature-implement | Same as `MAGENTO2_FI_TDD=1` / `--tdd` — behaviour tasks implemented test-first (red → green → refactor) |
-| `Smoke browser: off` | feature-implement, accessibility-audit | Same as `MAGENTO2_SMOKE_NO_BROWSER=1` / `--no-browser` — smoke and the pa11y runtime pass never drive a browser |
+| `Vendor prefix: **Acme**` | context resolver (and `feature` fallback) | Vendor for all generated namespaces, tables, ACLs, routes |
+| `Allow smoke on production: true` | `feature` smoke runner | Permits Phase 6B smoke tests against a production base URL (refused otherwise) |
+| `Feature implement: per-task commits = on` | `feature` | Same as `MAGENTO2_FI_PER_TASK_COMMITS=1` / `--per-task-commits` |
+| `Feature implement: tdd = on` | `feature` | Same as `MAGENTO2_FI_TDD=1` / `--tdd` — behaviour tasks implemented test-first (red → green → refactor) |
+| `Smoke browser: off` | `feature`, `a11y-audit` | Same as `MAGENTO2_SMOKE_NO_BROWSER=1` / `--no-browser` — smoke and the pa11y runtime pass never drive a browser |
+| `Smoke admin user: admin` | `feature` smoke runner | Admin username for the authenticated admin smoke suite. There is deliberately **no** password equivalent — a `Smoke admin pass:` line is ignored and warned about, since `CLAUDE.md` is committed |
 | `Explorer model: sonnet` | feature / review / fix | Model tier (`haiku`/`sonnet`/`opus`) for the read-only `explorer` comprehension agent. Defaults to `haiku`; name the tier that matches your session model to run it there. Does not affect `reviewer`. |
-| MySQL slow-log path | performance-audit / debug | Where to read the slow query log when non-default |
+| MySQL slow-log path | `perf-audit` / `debug` | Where to read the slow query log when non-default |
 
 `CLAUDE.md` participates in the context cache key, so editing it takes effect on the
 next skill run without manual cache busting.
@@ -80,13 +105,53 @@ next skill run without manual cache busting.
 > The per-task `Model tier (advisory)` fields in `feature` plans are
 > recommendations only — the harness does not route Skill-tool tasks by tier, so they run on the
 > session model. The one directive that takes live effect is `Explorer model:` above (the read-only
-> explorer subagent). See the feature-implement task-breakdown guide for the tier-by-type mapping.
+> explorer subagent). See the `feature` task-breakdown guide for the tier-by-type mapping.
+
+## Execution modes: agents vs inline
+
+The findings/RCA family — `audit`, `review`, `security`, `perf-audit`, `a11y-audit`,
+`marketplace`, and `fix` — can run its analysis two ways. The mode changes only *where*
+the work runs: the same references, checklists, and findings schema apply either way.
+
+| Mode | What happens | When it wins |
+|------|--------------|--------------|
+| `agents` | Read-only subagents run in parallel — `reviewer` (one per findings dimension), `explorer` (comprehension / RCA path-tracing) — and the skill owns synthesis: dedup, severity normalization, conflict tie-breaking | Large modules, multi-dimension audits, security-sensitive targets. Faster wall-clock; your main context stays small |
+| `inline` | The skill runs the same analysis itself, sequentially, in the conversation | Small targets, step-by-step steering, token-frugal runs, environments where subagents are unavailable |
+
+Selected in precedence order:
+
+1. **Per run** — `--agents` / `--inline` on the invocation, or plain language
+   ("in one flow", "without subagents", "use parallel agents", "delegate").
+2. **Per project** — `"execution_mode"` (`"agents"` | `"inline"`) in
+   [`.claude/m2.json`](#claudem2json). Absence means no preference; so does an
+   unrecognised value, which is reported rather than guessed at.
+3. **Per-skill default** — `audit` defaults to `agents` (fanning out is its whole
+   point); every other consumer defaults to `inline`. These defaults preserve
+   pre-2.0 behaviour.
+
+The chosen mode, and what chose it, is stated in the run header of every report.
+
+**Invariants in both modes:** approval gates always run in the main conversation and are
+never delegated; both modes read the same reference packs and emit the same
+findings-schema JSON/SARIF; the `reviewer` and `explorer` agents are strictly read-only.
+
+**One documented divergence:** an inline run can pause to ask you a clarifying question
+mid-analysis. A subagent cannot — in `agents` mode ambiguities are resolved
+conservatively and listed under **Open questions** in the report instead. Pick `inline`
+when the target is ambiguous enough that mid-run steering matters.
+
+Contract: `skills/context/references/execution-modes.md`.
 
 ## Output conventions
 
 Durable skill outputs go to `.docs/` in your project (full map in
-[Flows and scenarios](flows-and-scenarios.md#artifact-map)). Decide once per project
-whether to commit `.docs/`:
+[Flows and scenarios](flows-and-scenarios.md#artifact-map)). Every artifact-producing
+skill accepts `--docs-root={path}` to write somewhere else — the skill always appends
+its own category subdirectory, so `--docs-root=build/reports` yields
+`build/reports/audits/…`. `feature` uses this to nest a whole run's sub-skill artifacts
+under one feature folder, and `audit` uses it to keep every dimension's output together.
+
+Decide once per project whether to commit `.docs/`:
 
 - **Commit it** — the team gets shared engineering memory: blueprints, RCAs, deploy
   history, audit baselines. (Feature folders are also what makes interrupted
@@ -175,6 +240,6 @@ Collected in one place, since they span skills:
 | `--env=production` + interactive confirm | deploy | Both required for any production deploy |
 | `--auto --env=production` rejected | deploy | Unless `--i-know-what-im-doing` is also passed |
 | Snapshot prompt (`--snapshot`, `--include-db`) | deploy | Offered on every production deploy; DB dump is the only non-lossy `setup:upgrade` rollback |
-| `Allow smoke on production: true` | feature-implement | Smoke battery refuses production URLs without it |
+| `Allow smoke on production: true` | `feature` | Smoke battery refuses production URLs without it |
 | Typing `release` | release | Only confirmation that pushes tags |
 | Clean git tree + composer dry-run | deploy pre-flight | Required checks on production targets only |
