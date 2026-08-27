@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-audit-consolidate.sh — magento2-audit's consolidate.sh must merge per-dimension findings
+# test-audit-consolidate.sh — audit's consolidate.sh must merge per-dimension findings
 # documents into ONE `audit` document (JSON + SARIF) via the shared hub emitter: dedup across
 # dimensions, severity-rank, merge scanner_errors, and inject verdict/score/coverage.
 set -uo pipefail
@@ -11,7 +11,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-SCRIPT="skills/magento2-audit/scripts/consolidate.sh"
+SCRIPT="skills/audit/scripts/consolidate.sh"
 [ -f "$SCRIPT" ] || { echo "FAIL: $SCRIPT not found"; exit 1; }
 
 WORK="$(mktemp -d)"
@@ -22,7 +22,7 @@ DIM="$WORK/dims"; mkdir -p "$DIM" "$WORK/out"
 # security and review — it must collapse to ONE finding tagged with both dimensions.
 cat > "$DIM/Acme_Foo-security-1970-01-01.json" <<'JSON'
 {
-  "skill": "magento2-security-audit", "outputKind": "security",
+  "skill": "security", "outputKind": "security",
   "findings": [
     {"id":"S1","severity":"high","category":"security","title":"Missing ACL on endpoint",
      "evidence":[{"file":"Controller/Save.php","line":10}]},
@@ -34,7 +34,7 @@ cat > "$DIM/Acme_Foo-security-1970-01-01.json" <<'JSON'
 JSON
 cat > "$DIM/Acme_Foo-review-1970-01-01.json" <<'JSON'
 {
-  "skill": "magento2-module-review", "outputKind": "review",
+  "skill": "review", "outputKind": "review",
   "findings": [
     {"id":"R1","severity":"medium","category":"security","title":"Missing ACL on endpoint",
      "evidence":[{"file":"Controller/Save.php","line":10}]},
@@ -59,7 +59,7 @@ SARIF_OUT=$(find "$WORK/out" -name 'Acme_Foo-audit-*.sarif' | head -1)
 python3 - "$JSON_OUT" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert d.get('skill') == 'magento2-audit', f"skill={d.get('skill')!r}"
+assert d.get('skill') == 'audit', f"skill={d.get('skill')!r}"
 assert d.get('outputKind') == 'audit', f"outputKind={d.get('outputKind')!r}"
 titles = [f.get('title') for f in d['findings']]
 # 4 raw findings across 2 docs, but the duplicated "Missing ACL on endpoint" collapses to 1 → 3.
@@ -67,7 +67,7 @@ assert len(d['findings']) == 3, f"expected 3 deduped findings, got {len(d['findi
 # dedup keeps the higher severity (high from security beats medium from review)
 acl = [f for f in d['findings'] if f['title'] == 'Missing ACL on endpoint'][0]
 assert acl['severity'] == 'high', f"dedup should keep higher severity, got {acl['severity']}"
-assert set(acl.get('dimensions', [])) == {'magento2-security-audit','magento2-module-review'}, \
+assert set(acl.get('dimensions', [])) == {'security','review'}, \
     f"dedup must record both dimensions: {acl.get('dimensions')}"
 # severity-ranked: critical first
 assert d['findings'][0]['severity'] == 'critical', 'findings must be severity-ranked'
@@ -83,7 +83,7 @@ python3 - "$SARIF_OUT" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d.get('version') == '2.1.0'
-assert d['runs'][0]['tool']['driver']['name'] == 'magento2-audit'
+assert d['runs'][0]['tool']['driver']['name'] == 'audit'
 assert len(d['runs'][0]['results']) == 3, 'SARIF mirrors deduped findings'
 PY
 [ "$?" = "0" ] || { echo "FAIL: consolidated SARIF contract"; exit 1; }
@@ -94,7 +94,7 @@ PY
 # ---------------------------------------------------------------------------
 DIM2="$WORK/dims2"; mkdir -p "$DIM2" "$WORK/out2"
 cat > "$DIM2/Acme_Foo-security-1970-01-01.json" <<'JSON'
-{"skill":"magento2-security-audit","outputKind":"security","findings":[
+{"skill":"security","outputKind":"security","findings":[
   {"id":"CVE-1","severity":"high","category":"dependency","title":"Vulnerable package A","evidence":[]},
   {"id":"CVE-2","severity":"critical","category":"dependency","title":"Vulnerable package B"}
 ],"scanner_errors":[]}

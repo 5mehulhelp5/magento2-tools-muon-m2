@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Every `<skill>@<version>` token that appears in scripts, templates, or references
-# under skills/ MUST match the current version in
-# skills/magento2-context/references/skill-versioning.md.
+# Every `<skill>@<version>` token (for a known skill) that appears in scripts,
+# templates, or references under skills/ MUST match the current version in
+# skills/context/references/skill-versioning.md.
 #
 # This is the durable fix for the drift documented in v3. After a version bump the
 # maintainer runs the harness; this test fails until every emitter and template is
@@ -10,7 +10,7 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-REGISTRY="skills/magento2-context/references/skill-versioning.md"
+REGISTRY="skills/context/references/skill-versioning.md"
 if [ ! -f "$REGISTRY" ]; then
     echo "FAIL: registry not found at $REGISTRY"
     exit 1
@@ -26,13 +26,13 @@ import os
 import re
 import sys
 
-REGISTRY = "skills/magento2-context/references/skill-versioning.md"
+REGISTRY = "skills/context/references/skill-versioning.md"
 
-# Parse the registry table: lines like "| magento2-context | 1.1.0 | ..."
+# Parse the registry table: lines like "| context | 1.1.0 | ..."
 current = {}
 with open(REGISTRY) as fh:
     for line in fh:
-        m = re.match(r'^\|\s*(magento2-[a-z0-9-]+)\s*\|\s*([0-9]+\.[0-9]+\.[0-9]+)\s*\|', line)
+        m = re.match(r'^\|\s*([a-z][a-z0-9-]*)\s*\|\s*([0-9]+\.[0-9]+\.[0-9]+)\s*\|', line)
         if m:
             current[m.group(1)] = m.group(2)
 
@@ -43,7 +43,9 @@ if not current:
 # Walk every file under skills (except _tests) and find skill@version tokens.
 # The registry file itself is also scanned: literal X.Y.Z values must match the
 # registry row; placeholder forms like {Skill}@{Version} are skipped.
-skill_at_re = re.compile(r'(magento2-[a-z0-9-]+)@([0-9]+\.[0-9]+\.[0-9]+)')
+# Generic token shape; only names present in the registry are validated — with
+# prefix-free skill names, an unknown `foo@1.2.3` is ordinary prose, not drift.
+skill_at_re = re.compile(r'(?<![a-z0-9-])([a-z][a-z0-9-]*)@([0-9]+\.[0-9]+\.[0-9]+)')
 
 # Each file may also declare a *self-version* via a bash default:
 #   SKILL_VERSION="${SKILL_VERSION:-X.Y.Z}"  or  SKILL_VERSION=X.Y.Z
@@ -117,7 +119,7 @@ def owning_skill(path):
     if i + 1 >= len(parts):
         return None
     skill = parts[i + 1]
-    return skill if skill.startswith("magento2-") else None
+    return skill if skill in current else None
 
 problems = []
 
@@ -142,11 +144,11 @@ for root, dirs, files in os.walk("skills"):
             continue
         # A shared script may declare a back-compat default identity for a DIFFERENT skill
         # than the directory it lives in — the shared emit-json.sh lives under
-        # magento2-context but defaults SKILL_NAME to magento2-module-review for back-compat.
+        # context but defaults SKILL_NAME to review for back-compat.
         # Attribute its self-version markers to that declared default when present, so the
         # check still catches drift against the RIGHT skill's registry row.
         self_own = own
-        mdecl = re.search(r'SKILL_NAME="\$\{SKILL_NAME:-(magento2-[a-z0-9-]+)\}"', content)
+        mdecl = re.search(r'SKILL_NAME="\$\{SKILL_NAME:-([a-z][a-z0-9-]*)\}"', content)
         if mdecl and mdecl.group(1) in current:
             self_own = mdecl.group(1)
         try:
@@ -154,10 +156,8 @@ for root, dirs, files in os.walk("skills"):
                     for m in skill_at_re.finditer(line):
                         skill, version = m.group(1), m.group(2)
                         if skill not in current:
-                            problems.append(
-                                f"{path}:{lineno} references unknown skill '{skill}@{version}'"
-                            )
-                        elif current[skill] != version:
+                            continue
+                        if current[skill] != version:
                             problems.append(
                                 f"{path}:{lineno} '{skill}@{version}' "
                                 f"!= registry '{skill}@{current[skill]}'"

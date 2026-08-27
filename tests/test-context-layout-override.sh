@@ -11,7 +11,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-RESOLVER="$(pwd)/skills/magento2-context/scripts/resolve-context.sh"
+RESOLVER="$(pwd)/skills/context/scripts/resolve-context.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 

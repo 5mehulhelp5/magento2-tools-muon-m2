@@ -1,10 +1,155 @@
 # Changelog
 
 All notable changes to the `magento2-tools` plugin. The plugin is versioned as a unit;
-individual skill versions are tracked in
-`skills/magento2-context/references/skill-versioning.md`.
+individual skill versions are tracked in each SKILL.md frontmatter and the generated table in
+`skills/context/references/skill-versioning.md`.
 
 This project adheres to [Semantic Versioning](https://semver.org/).
+
+## [2.0.0] — 2026-08-27 — live security sources, one findings engine, short names
+
+The 1.x line accumulated three kinds of weight this release removes. A hand-curated CVE
+registry (196 KB of YAML, a private parser, a refresh pipeline, and 28 tests guarding
+them) that was stale the day after every release. Six divergent copies of the same
+findings-assembly script. And a `magento2-` prefix repeated in every skill name inside a
+plugin that is already namespaced — `magento2-tools:magento2-security-audit` said
+"magento2" three times.
+
+**Breaking:** skill names changed (mapping below), so any notes, scripts, or muscle
+memory referencing `magento2-tools:magento2-*` skills need the new names. Slash-command
+names are unchanged (`/magento2-tools:review` still works exactly as before), and one
+command was added (`/magento2-tools:docs`). Emitted artifacts now stamp the new skill
+names in `skill` / `skillVersions`.
+
+### Removed — the shipped CVE subsystem
+
+- `magento-cve-data.yaml`, `cve-extract.yaml`, `magento-cve-database.md`, `cve-scan.sh`,
+  `refresh-cve-data.py`, `cve_parser.py`, `cve_transforms.py`, `cve_data_lint.py`,
+  `inject-cve-status.sh`, and the 28 `test-cve-*` contract tests. No advisory data
+  ships with the plugin any more.
+- Replaced by `security/scripts/advisory-scan.sh`: a **live** `composer audit`
+  (Packagist + FriendsOfPHP advisory DB) plus Adobe's own `vendor/bin/patch-status`
+  verdicts ("is APSB-XX applied?" — `VULNERABLE` becomes a finding). Both sources
+  degrade loudly: an offline run records "dependency advisories were NOT checked" in
+  `scanner_errors` instead of silently passing. Trade-off stated plainly: results are
+  always current when online; offline runs cover secrets/EQP/patterns only (the 1.x
+  registry worked offline but was stale by design).
+- The `magento_core_cve_status` JSON block is gone (it described the registry's
+  staleness; there is no registry to be stale).
+
+### Changed — one findings engine
+
+- The six per-skill `build-findings.sh` copies (96–154 lines each, all divergent) are
+  now thin wrappers over one shared engine,
+  `context/scripts/findings-lib.sh` — scanner execution with JSON validation,
+  per-scanner stderr capture into `scanner_errors`, findings merge, and the emit
+  hand-off live in exactly one place. Fixed along the way: a stdin/heredoc collision
+  that made every builder emit `scanner_errors: []` unconditionally.
+
+### Changed — skill names (the full mapping)
+
+| 1.x | 2.0 | | 1.x | 2.0 |
+|---|---|---|---|---|
+| magento2-context | `context` | | magento2-audit | `audit` |
+| magento2-module-create | `module-create` | | magento2-module-review | `review` |
+| magento2-feature-implement | `feature` | | magento2-security-audit | `security` |
+| magento2-bug-fix | `fix` | | magento2-performance-audit | `perf-audit` |
+| magento2-static-analysis | `lint` | | magento2-accessibility-audit | `a11y-audit` |
+| magento2-test-generate | `test-generate` | | magento2-marketplace-prep | `marketplace` |
+| magento2-debug | `debug` | | magento2-module-upgrade | `upgrade` |
+| magento2-deploy | `deploy` | | magento2-docs-generate | `docs` |
+| magento2-release | `release` | | magento2-i18n | `i18n` |
+| magento2-extension-point | `extension-point` | | magento2-cli-command | `cli-command` |
+| magento2-system-config | `system-config` | | magento2-eav-attribute | `eav-attribute` |
+| magento2-message-queue | `message-queue` | | magento2-graphql-create | `graphql` |
+| magento2-webapi-create | `webapi` | | magento2-indexer | `indexer` |
+| magento2-adminhtml-form | `admin-form` | | magento2-adminhtml-listing | `admin-listing` |
+| magento2-frontend-create | `frontend` | | magento2-data-migration | `data-migration` |
+| magento2-breeze-child-theme | `breeze-theme` | | magento2-breeze-module-adapt | `breeze-adapt` |
+| magento2-breeze-compat-audit | `breeze-compat` | | | |
+
+Agents: `magento2-explorer` → `explorer`, `magento2-reviewer` → `reviewer`.
+Cross-skill references inside skill descriptions now use the namespaced form
+(`magento2-tools:review`) so routing guards stay unambiguous. The context cache moved
+to `.claude/.cache/context.json` (the old file is simply orphaned and regenerated).
+
+### Added — user-selectable execution modes
+
+- Every audit/RCA-family command accepts `--agents` / `--inline`, with a per-project
+  default via `"execution_mode"` in `.claude/m2.json` — the plugin's own override file,
+  alongside `magento_root` / `php_container`. `agents` fans analysis out to the read-only
+  `reviewer` / `explorer` subagents in parallel; `inline` runs the same steps sequentially
+  in the conversation. Skill defaults preserve 1.x behaviour (`audit` fans out, everything
+  else is inline). Approval gates never delegate.
+  Contract: `context/references/execution-modes.md`.
+- `context` resolves it: `execution_mode` is a top-level context field with an entry in
+  `resolution_source`, so the seven consumers read `{ctx.execution_mode}` from the Phase 0
+  document instead of each parsing a file. `m2.json` is already in the cache key, so
+  editing the mode busts the context cache. A value that is neither `agents` nor `inline`
+  resolves to `null` with the reason recorded — an unrecognised mode is an honest gap,
+  never a silently invented execution shape. It is deliberately **not** read from Claude
+  Code's `.claude/settings.json`: this plugin never parses that file, and Claude Code
+  accepts unknown keys there silently, so a setting placed there would do nothing with no
+  error to say so.
+- `/magento2-tools:docs` — the docs skill existed without a command.
+
+### Changed — generated registries instead of hand-maintained tables
+
+- Skill versions live in each `SKILL.md` frontmatter; the registry table is generated
+  (`context/scripts/gen-versions.sh`), and the 725-line hand-written per-skill
+  changelog inside `skill-versioning.md` is gone — this file is the durable record.
+- The README command table is generated from `commands/*.md`
+  (`context/scripts/gen-routing.sh`); freshness is contract-tested, and the shared
+  `SKILL_VERSIONS_JSON` stamp reads the context version from frontmatter at run time
+  instead of six hardcoded copies.
+
+### Tests
+
+28 CVE tests removed with their subsystem; added `test-advisory-scan.sh` (7 scenarios:
+offline, stubbed advisories incl. the null-`cve` GHSA case, invalid JSON, patch-status
+verdicts/opt-out/broken/absent), `test-security-no-shipped-data.sh` (end-to-end offline
+degradation), `test-findings-lib-single-engine.sh`, `test-version-table-generated.sh`,
+`test-routing-generated.sh`, and `test-execution-modes.sh`.
+
+- `test-context-execution-mode.sh` (new): the resolver contract — absent file, absent
+  key, both valid modes, an unknown mode, a non-string value, `resolution_source`
+  attribution, cache-busting on edit, and a guard that no skill regrows a
+  `settings.json` read path.
+- `test-execution-modes.sh` extended: the canon must show the literal `.claude/m2.json`
+  shape — a dotted key name alone leaves a reader guessing between nested and flat — and
+  the resolver must emit the field.
+
+Suite: 76 tests, all green.
+
+### Documentation — `docs/` rewritten for 2.0
+
+The six guides under `docs/` were written against 1.x names and 1.x architecture. All of
+it now matches what ships.
+
+- **Names.** Every 1.x skill name (`feature-implement`, `module-review`,
+  `performance-audit`, `security-audit`, `accessibility-audit`, `module-upgrade`,
+  `frontend-create`) is gone from the guides, along with the invocation template
+  `magento2-tools:magento2-<skill>`, which resolves to nothing under the new naming.
+  `.docs/bug-fixes/` and the `[bug-fix]` commit prefix are deliberately unchanged — those
+  are real identifiers, not stale names.
+- **Ownership.** The shared findings emitters moved to `context` in this release;
+  `flows-and-scenarios.md` had them attributed to `review`, contradicting its own
+  architecture section two paragraphs earlier.
+- **The README dependency graph is rebuilt** from each skill's Related-Skills table, and
+  now states what an edge means. Three edges had been wrong in either direction:
+  `deploy ──► upgrade, release` was backwards (that is deploy's *caller* table), and
+  `perf-audit ──► review, security` and `security ──► review` were not delegation at all.
+  `feature`'s list named two skills it does not invoke and omitted seven it does. Fix
+  routing — a findings hand-off, not an invocation — is now listed separately instead of
+  being drawn as a dependency.
+- **Newly documented:** execution modes, `--docs-root` / `DOCS_ROOT`, the `audit` skill's
+  workflow recipe and its place in the architecture as `feature`'s inspect-counterpart,
+  `MAGENTO2_DEPLOY_NON_INTERACTIVE`, `M2_SMOKE_ADMIN_USER` / `M2_SMOKE_ADMIN_PASS`, and
+  the `Smoke admin user:` hint — including why there is deliberately no password
+  equivalent (`CLAUDE.md` is a committed file).
+- **The artifact map is complete**, having been missing `quality/`, `marketplace/`,
+  `accessibility/`, `breeze-compat/`, `docs-generated/`, `spikes/`, and the seven
+  generator run-report directories.
 
 ## [1.33.0] — 2026-08-21 — the REST surface was described only in prose
 
@@ -1117,7 +1262,7 @@ it had not — the same failure class as 1.27.0, in the passes that release did 
   unchanged. Guarded by `tests/test-source-of-truth-reference.sh` and
   `tests/test-source-of-truth-rollout.sh`.
 - Skill patch-bumps (behavioral rule added to each): all 18 touched skills — see
-  `skills/magento2-context/references/skill-versioning.md`.
+  `skills/context/references/skill-versioning.md`.
 
 ## [1.19.1] — 2026-07-05 — Breeze-aware frontend-create routing
 
@@ -1392,7 +1537,7 @@ Provenance-only patch. The per-skill version bumps that accompany the [1.10.1] a
 
 ### Changed
 
-- Synced `skills/magento2-context/references/skill-versioning.md` (the per-skill version registry) and the `<skill>@<version>` pins it governs to the 1.10.1 remediation: `magento2-context` → 1.6.1, `magento2-module-create` → 1.7.1, `magento2-module-review` → 2.3.1, `magento2-deploy` → 1.2.1, `magento2-security-audit` → 1.2.1, `magento2-test-generate` → 1.1.2, `magento2-eav-attribute` → 1.2.1, `magento2-graphql-create` → 1.0.3, `magento2-release` → 1.1.1, `magento2-adminhtml-listing` → 1.0.1. Skills whose 1.10.1 changes were doc-only (`magento2-i18n`, `magento2-debug`, `magento2-performance-audit`, `magento2-feature-implement`) were intentionally not bumped.
+- Synced `skills/context/references/skill-versioning.md`.(the per-skill version registry) and the `<skill>@<version>` pins it governs to the 1.10.1 remediation: `magento2-context` → 1.6.1, `magento2-module-create` → 1.7.1, `magento2-module-review` → 2.3.1, `magento2-deploy` → 1.2.1, `magento2-security-audit` → 1.2.1, `magento2-test-generate` → 1.1.2, `magento2-eav-attribute` → 1.2.1, `magento2-graphql-create` → 1.0.3, `magento2-release` → 1.1.1, `magento2-adminhtml-listing` → 1.0.1. Skills whose 1.10.1 changes were doc-only (`magento2-i18n`, `magento2-debug`, `magento2-performance-audit`, `magento2-feature-implement`) were intentionally not bumped.
 
 ## [1.10.1] — 2026-06-18 — audit remediation: bug fixes, drift cleanup, regression guards
 

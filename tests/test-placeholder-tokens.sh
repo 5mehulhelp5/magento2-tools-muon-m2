@@ -2,7 +2,7 @@
 # test-placeholder-tokens.sh — the unknown-token lint (CTX-10 / T4).
 #
 # Every `{token}` used in any skills/*/templates/ file must be listed in the Registry block
-# of skills/magento2-context/references/placeholder-schema.md. A template token that is not
+# of skills/context/references/placeholder-schema.md. A template token that is not
 # registered fails this test, so new ad-hoc placeholder spellings cannot drift back in.
 #
 # Token grammar: `{` + an identifier of [A-Za-z][A-Za-z0-9_.-]* + `}` (single word, no
@@ -17,7 +17,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-SCHEMA="skills/magento2-context/references/placeholder-schema.md"
+SCHEMA="skills/context/references/placeholder-schema.md"
 if [ ! -f "$SCHEMA" ]; then
     echo "FAIL: placeholder schema not found at $SCHEMA"
     exit 1

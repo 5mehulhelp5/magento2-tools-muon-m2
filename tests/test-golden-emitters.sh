@@ -21,8 +21,8 @@ fi
 
 GOLDEN_DIR="tests/golden"
 FIX_DIR="$GOLDEN_DIR/fixtures"
-EMIT_JSON="skills/magento2-context/scripts/emit-json.sh"
-EMIT_SARIF="skills/magento2-context/scripts/emit-sarif.sh"
+EMIT_JSON="skills/context/scripts/emit-json.sh"
+EMIT_SARIF="skills/context/scripts/emit-sarif.sh"
 PLACEHOLDER="1970-01-01T00:00:00Z"
 
 WORK="$(mktemp -d)"
@@ -36,9 +36,9 @@ TARGET_PATH="src/app/code/Acme/Golden" \
 MODE="full" \
 SCOPE="module" \
 OUTPUT_KIND="review" \
-SKILL_NAME="magento2-module-review" \
+SKILL_NAME="review" \
 SKILL_VERSION="2.3.0" \
-SKILL_VERSIONS_JSON='["magento2-module-review@2.3.0","magento2-context@1.6.0"]' \
+SKILL_VERSIONS_JSON='["review@2.3.0","context@1.6.0"]' \
 OUTPUT_DIR="$WORK" \
 OUTPUT_BASENAME="golden" \
 bash "$EMIT_JSON" > "$WORK/emit-json.raw.json" 2>"$WORK/emit-json.err" || {

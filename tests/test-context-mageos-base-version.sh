@@ -54,7 +54,7 @@ cat > "$WORK/composer.lock" <<'EOF'
 }
 EOF
 
-OUT="$(cd "$WORK" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
+OUT="$(cd "$WORK" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
 
 if [ -z "$OUT" ]; then
     echo "FAIL: resolver produced no output"
@@ -121,7 +121,7 @@ PY
 # as a gap worth "fixing" with that fallback; this pins it shut.
 rm -f "$WORK/composer.lock"
 
-OUT="$(cd "$WORK" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
+OUT="$(cd "$WORK" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
 
 python3 - "$OUT" <<'PY'
 import sys, json
@@ -196,7 +196,7 @@ cat > "$WORK/composer.json" <<'EOF'
 EOF
 # No composer.lock — already removed above; the constraint fallback is what runs.
 
-OUT="$(cd "$WORK" && bash skills/magento2-context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
+OUT="$(cd "$WORK" && bash skills/context/scripts/resolve-context.sh --no-cache 2>/dev/null || true)"
 
 python3 - "$OUT" <<'PY'
 import sys, json

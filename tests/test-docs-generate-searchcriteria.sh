@@ -88,7 +88,7 @@ need({q['key'] for q in request['request']['url']['query']} == expected_query,
      'Postman query parameters differ from the OpenAPI set')
 
 # --- drift guard: the reference doc and the emitter must name the same components ---
-ref_text = open('skills/magento2-docs-generate/references/search-criteria-params.md',
+ref_text = open('skills/docs/references/search-criteria-params.md',
                 encoding='utf-8').read()
 block = re.search(r'```search-criteria-params\n(.*?)```', ref_text, re.S)
 need(block is not None,
@@ -98,7 +98,7 @@ need(documented == set(declared),
      'reference doc and emitter disagree on the parameter set: %r'
      % sorted(documented ^ set(declared)))
 
-emitter = open('skills/magento2-docs-generate/scripts/emit-api-artifacts.sh',
+emitter = open('skills/docs/scripts/emit-api-artifacts.sh',
                encoding='utf-8').read()
 for name in expected_query:
     need(name in emitter, 'emitter no longer emits %s' % name)

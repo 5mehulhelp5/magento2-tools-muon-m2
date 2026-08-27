@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-upgrade-emitter.sh — magento2-module-upgrade must emit BOTH a schema-valid JSON
+# test-upgrade-emitter.sh — upgrade must emit BOTH a schema-valid JSON
 # document AND a SARIF sibling via the shared hub emitter (regression guard for Proposal 3:
 # the skill previously wrote JSON only, with no SARIF, so its findings could not feed CI /
 # GitHub Code Scanning like the other findings skills).
@@ -12,7 +12,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-SCRIPT="skills/magento2-module-upgrade/scripts/emit-report.sh"
+SCRIPT="skills/upgrade/scripts/emit-report.sh"
 [ -f "$SCRIPT" ] || { echo "FAIL: $SCRIPT not found"; exit 1; }
 
 WORK="$(mktemp -d)"
@@ -59,7 +59,7 @@ python3 - "$JSON_OUT" <<'PY'
 import json, sys
 with open(sys.argv[1]) as fh:
     d = json.load(fh)
-assert d.get('skill') == 'magento2-module-upgrade', f"skill={d.get('skill')!r}"
+assert d.get('skill') == 'upgrade', f"skill={d.get('skill')!r}"
 assert d.get('outputKind') == 'upgrade', f"outputKind={d.get('outputKind')!r}"
 assert isinstance(d.get('findings'), list) and len(d['findings']) == 2, 'findings should carry both inputs'
 assert 'scanner_errors' in d, 'scanner_errors field missing (schema requires it)'
@@ -72,7 +72,7 @@ with open(sys.argv[1]) as fh:
     d = json.load(fh)
 assert d.get('version') == '2.1.0', f"SARIF version={d.get('version')!r}"
 assert isinstance(d.get('runs'), list) and d['runs'], 'SARIF must have a run'
-assert d['runs'][0]['tool']['driver']['name'] == 'magento2-module-upgrade', 'SARIF driver name'
+assert d['runs'][0]['tool']['driver']['name'] == 'upgrade', 'SARIF driver name'
 assert len(d['runs'][0]['results']) == 2, 'SARIF results should mirror findings'
 PY
 [ "$?" = "0" ] || { echo "FAIL: module-upgrade SARIF did not match contract"; exit 1; }

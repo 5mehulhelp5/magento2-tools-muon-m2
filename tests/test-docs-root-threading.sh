@@ -7,13 +7,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 # Task 3 covers the 9 script-backed emitters; Task 4 extends this array to the
 # remaining 15 LLM-report skills.
 SKILLS=(
-    magento2-module-review magento2-security-audit magento2-performance-audit
-    magento2-static-analysis magento2-marketplace-prep magento2-accessibility-audit
-    magento2-breeze-compat-audit magento2-module-upgrade magento2-deploy
-    magento2-test-generate magento2-docs-generate magento2-release magento2-i18n
-    magento2-debug magento2-bug-fix magento2-adminhtml-form magento2-adminhtml-listing
-    magento2-cli-command magento2-eav-attribute magento2-extension-point
-    magento2-indexer magento2-message-queue magento2-system-config magento2-data-migration
+    review security perf-audit
+    lint marketplace a11y-audit
+    breeze-compat upgrade deploy
+    test-generate docs release i18n
+    debug fix admin-form admin-listing
+    cli-command eav-attribute extension-point
+    indexer message-queue system-config data-migration
 )
 
 FAIL=0

@@ -30,7 +30,7 @@ cat > "$WORK/src/app/code/Acme/Probe/etc/module.xml" <<'EOF'
 EOF
 
 mkdir -p "$WORK/.claude/.cache"
-cat > "$WORK/.claude/.cache/magento2-context.json" <<'EOF'
+cat > "$WORK/.claude/.cache/context.json" <<'EOF'
 {"runner":"","runner_kind":"null","magento_cli":"","composer":"","module_dir":"src/app/code"}
 EOF
 
@@ -38,7 +38,7 @@ cd "$WORK"
 set +e
 MODULES="Acme_Probe" ENV=local STRICT=0 \
     RUNNER="" RUNNER_KIND="null" MAGENTO_CLI="" \
-    bash "$OLDPWD/skills/magento2-deploy/scripts/preflight.sh" > preflight.json 2> preflight.err
+    bash "$OLDPWD/skills/deploy/scripts/preflight.sh" > preflight.json 2> preflight.err
 EXIT=$?
 set -e
 cd "$OLDPWD"

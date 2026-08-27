@@ -29,7 +29,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-CHECKER="$PWD/skills/magento2-static-analysis/scripts/surface-invariants.sh"
+CHECKER="$PWD/skills/lint/scripts/surface-invariants.sh"
 [ -x "$CHECKER" ] || { echo "FAIL: $CHECKER not executable"; exit 1; }
 
 WORK="$(mktemp -d)"

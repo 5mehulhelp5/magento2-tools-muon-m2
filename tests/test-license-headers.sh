@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-license-headers.sh — contract test for the module-create license-header stamper.
 #
-# magento2-context/scripts/add-license-headers.sh <module-path> <Vendor> must:
+# context/scripts/add-license-headers.sh <module-path> <Vendor> must:
 #   - prepend the standard copyright header (pointing at LICENSE.txt) to every *.php,
 #     inserted immediately after the `<?php` line;
 #   - be idempotent — a file that already carries the header is left untouched, and a
@@ -13,7 +13,7 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-SCRIPT="skills/magento2-context/scripts/add-license-headers.sh"
+SCRIPT="skills/context/scripts/add-license-headers.sh"
 MARKER="See LICENSE.txt for license details."
 COPYRIGHT="Copyright © Acme. All rights reserved."
 

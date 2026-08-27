@@ -6,16 +6,16 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 IN_SCOPE=(
-  magento2-module-create magento2-frontend-create magento2-graphql-create magento2-webapi-create
-  magento2-adminhtml-form magento2-adminhtml-listing magento2-extension-point magento2-system-config
-  magento2-cli-command magento2-eav-attribute magento2-message-queue magento2-data-migration
-  magento2-indexer magento2-breeze-child-theme magento2-breeze-module-adapt
-  magento2-docs-generate magento2-test-generate magento2-feature-implement
+  module-create frontend graphql webapi
+  admin-form admin-listing extension-point system-config
+  cli-command eav-attribute message-queue data-migration
+  indexer breeze-theme breeze-adapt
+  docs test-generate feature
 )
 OUT_OF_SCOPE=(
-  magento2-module-review magento2-security-audit magento2-performance-audit
-  magento2-accessibility-audit magento2-breeze-compat-audit magento2-static-analysis
-  magento2-audit magento2-marketplace-prep magento2-debug
+  review security perf-audit
+  a11y-audit breeze-compat lint
+  audit marketplace debug
 )
 FAIL=0
 
@@ -24,7 +24,7 @@ for s in "${IN_SCOPE[@]}"; do
     [ -f "$f" ] || { echo "FAIL: $f not found"; FAIL=1; continue; }
     grep -qE '^[[:space:]]*-[[:space:]]*\*\*Source of truth\.\*\*' "$f" \
         || { echo "FAIL: $f missing **Source of truth.** Core Rule bullet"; FAIL=1; }
-    grep -qE '^[[:space:]]*-[[:space:]]*`magento2-context/references/source-of-truth\.md`' "$f" \
+    grep -qE '^[[:space:]]*-[[:space:]]*`context/references/source-of-truth\.md`' "$f" \
         || { echo "FAIL: $f missing source-of-truth.md reference pointer"; FAIL=1; }
 done
 

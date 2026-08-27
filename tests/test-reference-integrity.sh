@@ -50,8 +50,13 @@ while IFS= read -r doc; do
                 rel="${ref#'${CLAUDE_PLUGIN_ROOT}/'}"
                 target="./${rel}"
                 ;;
-            magento2-*/references/* | magento2-*/templates/* | magento2-*/scripts/*)
-                # Dominant cross-skill form `magento2-<skill>/references/foo.md`. Resolve it
+            references/* | templates/* | scripts/*)
+                # Same-skill relative form.
+                rel="$ref"
+                target="${skill_dir}/${ref}"
+                ;;
+            */references/* | */templates/* | */scripts/*)
+                # Dominant cross-skill form `<skill>/references/foo.md`. Resolve it
                 # PRECISELY against skills/<skill>/... — no fuzzy fallback (TEST-4).
                 rel="$ref"
                 target="skills/${ref}"
@@ -69,7 +74,7 @@ while IFS= read -r doc; do
         if [ -e "$target" ]; then
             continue
         fi
-        # A cross-skill `magento2-<skill>/...` ref must resolve exactly — a same-named file
+        # A cross-skill `<skill>/...` ref must resolve exactly — a same-named file
         # somewhere else in the tree does NOT satisfy it.
         if [ "$cross_skill" = "1" ]; then
             echo "missing reference: ${ref} (in ${doc})"
@@ -83,7 +88,7 @@ while IFS= read -r doc; do
         fi
         echo "missing reference: ${ref} (in ${doc})"
         FAIL=1
-    done < <(grep -oE '`(\$\{CLAUDE_SKILL_DIR\}/|\$\{CLAUDE_PLUGIN_ROOT\}/)?(magento2-[a-z-]+/(references|templates|scripts)|references|templates|scripts|skills)/[A-Za-z0-9._/-]+`' "$doc" | sed 's/`//g' | sort -u)
+    done < <(grep -oE '`(\$\{CLAUDE_SKILL_DIR\}/|\$\{CLAUDE_PLUGIN_ROOT\}/)?([a-z][a-z0-9-]*/(references|templates|scripts)|references|templates|scripts|skills)/[A-Za-z0-9._/-]+`' "$doc" | sed 's/`//g' | sort -u)
 done < <(find skills \( -name SKILL.md -o \( -path '*/references/*.md' \) \) -type f | sort)
 
 exit "$FAIL"

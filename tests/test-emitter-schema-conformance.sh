@@ -12,8 +12,8 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 77
 fi
 
-SCHEMA="skills/magento2-context/references/findings-schema.md"
-EMIT_JSON="skills/magento2-context/scripts/emit-json.sh"
+SCHEMA="skills/context/references/findings-schema.md"
+EMIT_JSON="skills/context/scripts/emit-json.sh"
 FIX_DIR="tests/golden/fixtures"
 
 for f in "$SCHEMA" "$EMIT_JSON" "$FIX_DIR/findings.json" "$FIX_DIR/context.json"; do
@@ -31,9 +31,9 @@ TARGET_PATH="src/app/code/Acme/Golden" \
 MODE="full" \
 SCOPE="module" \
 OUTPUT_KIND="review" \
-SKILL_NAME="magento2-module-review" \
+SKILL_NAME="review" \
 SKILL_VERSION="2.3.0" \
-SKILL_VERSIONS_JSON='["magento2-module-review@2.3.0","magento2-context@1.6.0"]' \
+SKILL_VERSIONS_JSON='["review@2.3.0","context@1.6.0"]' \
 OUTPUT_DIR="$WORK" \
 OUTPUT_BASENAME="conf" \
 bash "$EMIT_JSON" > "$WORK/out.json" 2>"$WORK/err" || {

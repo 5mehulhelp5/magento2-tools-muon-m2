@@ -4,7 +4,7 @@ Recipe-style guide for using `magento2-tools` in routine development on an exist
 Magento 2 project. Each recipe describes the invocation, what happens, where you will be
 asked to approve, and what artifacts are left behind.
 
-Invocations are shown in their explicit form (`/magento2-tools:magento2-<skill> …`);
+Invocations are shown in their explicit form (`/magento2-tools:<skill> …`);
 plain-language requests trigger the same skills — *"fix this bug"*, *"review my
 changes"*, *"deploy these modules to staging"*.
 
@@ -12,29 +12,30 @@ changes"*, *"deploy these modules to staging"*.
 
 | Task | Skill | Typical invocation |
 |------|-------|--------------------|
-| Fix a reported defect | `magento2-bug-fix` | `/magento2-tools:magento2-bug-fix "500 on checkout when…"` |
-| Build / change a feature | `magento2-feature-implement` | *"Implement a store-pickup-notes feature"* |
-| Resume an interrupted feature | `magento2-feature-implement` | *"resume ./.docs/StorePickupNotes"* |
-| Review code (full or diff) | `magento2-module-review` | `/magento2-tools:magento2-module-review --diff Acme_Checkout` |
-| Generate missing tests | `magento2-test-generate` | `/magento2-tools:magento2-test-generate --types=unit Acme_Checkout` |
-| Deploy modules | `magento2-deploy` | `/magento2-tools:magento2-deploy --env=staging Acme_Checkout` |
-| Investigate without changing code | `magento2-debug` | `/magento2-tools:magento2-debug logs --since=1h` |
-| Add an EAV attribute | `magento2-eav-attribute` | `--entity=product --code=acme_color --type=select …` |
-| Add a GraphQL query/mutation | `magento2-graphql-create` | `--module=Acme_Reviews --operation=query` |
-| Frontend scaffold (theme/JS/email) | `magento2-frontend-create` | `/magento2-tools:magento2-frontend-create email-template` |
-| Seed / import / transform data | `magento2-data-migration` | `--type=import` |
-| Sync translations | `magento2-i18n` | `--locales=en_US,de_DE Acme_Checkout` |
-| Upgrade Magento/PHP compatibility | `magento2-module-upgrade` | `--to-magento=2.4.7 Acme_Checkout` |
-| Security audit | `magento2-security-audit` | `--scope=site` |
-| Performance audit | `magento2-performance-audit` | `--scope=site` |
-| Cut a release | `magento2-release` | `/magento2-tools:magento2-release Acme_Checkout` |
+| Fix a reported defect | `fix` | `/magento2-tools:fix "500 on checkout when…"` |
+| Build / change a feature | `feature` | *"Implement a store-pickup-notes feature"* |
+| Resume an interrupted feature | `feature` | *"resume ./.docs/StorePickupNotes"* |
+| Review code (full or diff) | `review` | `/magento2-tools:review --diff Acme_Checkout` |
+| Generate missing tests | `test-generate` | `/magento2-tools:test-generate --types=unit Acme_Checkout` |
+| Deploy modules | `deploy` | `/magento2-tools:deploy --env=staging Acme_Checkout` |
+| Investigate without changing code | `debug` | `/magento2-tools:debug logs --since=1h` |
+| Add an EAV attribute | `eav-attribute` | `--entity=product --code=acme_color --type=select …` |
+| Add a GraphQL query/mutation | `graphql` | `--module=Acme_Reviews --operation=query` |
+| Frontend scaffold (theme/JS/email) | `frontend` | `/magento2-tools:frontend email-template` |
+| Seed / import / transform data | `data-migration` | `--type=import` |
+| Sync translations | `i18n` | `--locales=en_US,de_DE Acme_Checkout` |
+| Upgrade Magento/PHP compatibility | `upgrade` | `--to-magento=2.4.7 Acme_Checkout` |
+| Security audit | `security` | `--scope=site` |
+| Performance audit | `perf-audit` | `--scope=site` |
+| Cut a release | `release` | `/magento2-tools:release Acme_Checkout` |
+| Audit everything before a release | `audit` | `/magento2-tools:audit --release-readiness Acme_Checkout` |
 
 ---
 
 ## Fixing a bug
 
 ```
-/magento2-tools:magento2-bug-fix "Order export cron silently skips orders with virtual items"
+/magento2-tools:fix "Order export cron silently skips orders with virtual items"
 ```
 
 Optional flags: `--module=Acme_OrderExport` (constrain RCA), `--log=<path>`,
@@ -53,9 +54,9 @@ Optional flags: `--module=Acme_OrderExport` (constrain RCA), `--log=<path>`,
    production code changes until you approve.**
 5. **TDD patch** — regression test first (confirmed failing for the right reason), then
    the minimal patch, then the module's full suite and static checks.
-6. **Review** — `magento2-module-review --diff` on each modified module; new
+6. **Review** — `review --diff` on each modified module; new
    Critical/High findings introduced by the patch are fixed.
-7. **Deploy (optional)** — only if you authorize; delegates to `magento2-deploy` and
+7. **Deploy (optional)** — only if you authorize; delegates to `deploy` and
    re-runs the reproduction recipe afterwards.
 8. **Report** — severity-classified summary.
 
@@ -68,8 +69,8 @@ expansion (newly discovered bugs are filed, not absorbed), `vendor/` is never ed
 `report.md`.
 
 **Edge cases worth knowing:** a fix that needs a `db_schema.xml` change is redirected to
-`magento2-feature-implement --mode=extend`; a data repair (corrupted rows) stays
-in-skill via an idempotent `magento2-data-migration` patch.
+`feature --mode=extend`; a data repair (corrupted rows) stays
+in-skill via an idempotent `data-migration` patch.
 
 ---
 
@@ -122,8 +123,8 @@ unchecked task without re-asking for approvals you already gave. (Without an exp
 After hand-writing changes (or any time):
 
 ```
-/magento2-tools:magento2-module-review --diff Acme_Checkout      # only what changed vs origin/main
-/magento2-tools:magento2-module-review Acme_Checkout             # full review
+/magento2-tools:review --diff Acme_Checkout      # only what changed vs origin/main
+/magento2-tools:review Acme_Checkout             # full review
 Quick review of app/code/Acme/Checkout                           # Tier-1-only fast pass
 ```
 
@@ -151,12 +152,12 @@ when invoked from another skill — the SARIF uploads straight into GitHub Code 
 ## Generating tests
 
 ```
-/magento2-tools:magento2-test-generate --types=unit,api Acme_OrderExport
+/magento2-tools:test-generate --types=unit,api Acme_OrderExport
 ```
 
 This skill is the **backfiller** for code that already exists — including modules with no
-tests at all. (For *new* behaviour, the owning skill writes the test first: bug-fix always,
-feature-implement under `--tdd`, and data-migration/eav-attribute by default. See
+tests at all. (For *new* behaviour, the owning skill writes the test first: `fix` always,
+`feature` under `--tdd`, and `data-migration`/`eav-attribute` by default. See
 [Flows and scenarios](flows-and-scenarios.md#test-first-builders-data-migration-eav-attribute).)
 
 Discovery first: `coverage-gap.sh` finds source classes without tests and surfaces
@@ -178,9 +179,9 @@ instead.
 ## Deploying
 
 ```
-/magento2-tools:magento2-deploy --env=local Acme_ModuleA Acme_ModuleB
-/magento2-tools:magento2-deploy --env=staging --strict Acme_ModuleA
-/magento2-tools:magento2-deploy --env=production --snapshot Acme_ModuleA
+/magento2-tools:deploy --env=local Acme_ModuleA Acme_ModuleB
+/magento2-tools:deploy --env=staging --strict Acme_ModuleA
+/magento2-tools:deploy --env=production --snapshot Acme_ModuleA
 ```
 
 **What happens:** pre-flight validation (files exist, composer validate, unit tests,
@@ -208,16 +209,16 @@ CI) + optional `.snapshot.tar.gz`.
 
 ## Investigating (read-only)
 
-`magento2-debug` is the "look, don't touch" skill — six modes:
+`debug` is the "look, don't touch" skill — six modes:
 
 ```
-/magento2-tools:magento2-debug logs --since=1h --pattern="checkout"   # grouped log triage
-/magento2-tools:magento2-debug trace --event=checkout_submit_all_after # observers for an event
-/magento2-tools:magento2-debug trace --method='Magento\Catalog\Model\Product::save' # plugins
-/magento2-tools:magento2-debug di --for='Magento\Catalog\Api\ProductRepositoryInterface'
-/magento2-tools:magento2-debug slow-queries --since=24h
-/magento2-tools:magento2-debug snapshot
-/magento2-tools:magento2-debug xdebug
+/magento2-tools:debug logs --since=1h --pattern="checkout"   # grouped log triage
+/magento2-tools:debug trace --event=checkout_submit_all_after # observers for an event
+/magento2-tools:debug trace --method='Magento\Catalog\Model\Product::save' # plugins
+/magento2-tools:debug di --for='Magento\Catalog\Api\ProductRepositoryInterface'
+/magento2-tools:debug slow-queries --since=24h
+/magento2-tools:debug snapshot
+/magento2-tools:debug xdebug
 ```
 
 Output is de-duplicated and grouped (log entries by error signature, slow queries by
@@ -226,14 +227,14 @@ tree — no running instance needed. Add `--save` to write the report to
 `.docs/debug/{mode}-{date}.md`.
 
 When findings need action, the skill points you onward: defects →
-`magento2-bug-fix`, slow-query patterns → `magento2-performance-audit`.
+`fix`, slow-query patterns → `perf-audit`.
 
 ---
 
 ## Adding an EAV attribute
 
 ```
-/magento2-tools:magento2-eav-attribute --entity=product --code=acme_color \
+/magento2-tools:eav-attribute --entity=product --code=acme_color \
   --label="Acme Color" --type=select --module=Acme_Catalog
 ```
 
@@ -257,7 +258,7 @@ is available it falls back to a test-first unit test and records the integration
 ## Adding GraphQL
 
 ```
-/magento2-tools:magento2-graphql-create --module=Acme_Reviews --operation=query --auth=customer
+/magento2-tools:graphql --module=Acme_Reviews --operation=query --auth=customer
 ```
 
 Schema-first: you settle the schema fragment and resolver plan (standard vs. **batch**
@@ -265,14 +266,14 @@ vs. paginated) before code. Any resolver feeding a parent *list* is generated as
 `BatchResolverInterface` implementation — N inputs, O(1) queries. Mutations get auth
 checks (anonymous requires justification); store-scoped data respects the `Store`
 header. Existing `schema.graphqls` is appended to, never rewritten. Unit tests come via
-`magento2-test-generate`, and a `--diff` review follows generation.
+`test-generate`, and a `--diff` review follows generation.
 
 ---
 
 ## Frontend work
 
 ```
-/magento2-tools:magento2-frontend-create <theme|requirejs-module|ko-component|alpine-component|email-template|static-asset>
+/magento2-tools:frontend <theme|requirejs-module|ko-component|alpine-component|email-template|static-asset>
 ```
 
 One operation per invocation. The skill is **theme-aware** via the context hub: on a
@@ -285,7 +286,7 @@ and `email_templates.xml` are appended/merged, never overwritten.
 ## Data seeding, imports, and transformations
 
 ```
-/magento2-tools:magento2-data-migration --type=seed|import|transform
+/magento2-tools:data-migration --type=seed|import|transform
 ```
 
 Three shapes: fixed seed (< 100 rows inline in a data patch), bulk import (chunked
@@ -306,7 +307,7 @@ red → green evidence).
 ## Keeping translations in sync
 
 ```
-/magento2-tools:magento2-i18n --locales=en_US,de_DE --module=Acme_Checkout
+/magento2-tools:i18n --locales=en_US,de_DE --module=Acme_Checkout
 ```
 
 Extracts phrases (via `i18n:collect-phrases` when the CLI is available, regex fallback
@@ -323,7 +324,7 @@ match per locale) and CSV well-formedness. Optional machine translation
 ## Cutting a release
 
 ```
-/magento2-tools:magento2-release Acme_OrderExport
+/magento2-tools:release Acme_OrderExport
 ```
 
 The next version is derived from **conventional commits** since the last
@@ -332,7 +333,7 @@ major) — path-filtered to the module, so sibling modules in the same repo don'
 the bump. Override with `--version=X.Y.Z` (downgrades and equal versions are refused).
 
 Before anything is tagged, the release runs
-`magento2-deploy --validate-only --strict --env=local` — pre-flight only, never a
+`deploy --validate-only --strict --env=local` — pre-flight only, never a
 state-changing deploy. Then: `composer.json` bump + `CHANGELOG.md` update + commit, a
 module-prefixed annotated tag (`Acme_OrderExport-1.4.0`), and the **push gate — you
 must type `release` to confirm**; anything else cancels. Optional GitHub Release via
@@ -347,13 +348,36 @@ must type `release` to confirm**; anything else cancels. Optional GitHub Release
 
 Worth scheduling weekly or before every launch:
 
+**Everything at once** — the release-readiness pass:
+
+```
+/magento2-tools:audit --release-readiness Acme_Checkout
+```
+
+The umbrella over every audit below. It picks the dimensions the module's surface
+actually warrants (accessibility only where storefront templates exist, Breeze
+compatibility only under a Breeze theme, marketplace readiness only when you ask for it),
+runs them, and **consolidates** rather than concatenates: duplicates across dimensions
+collapse into one finding tagged with every dimension that raised it, keeping the highest
+severity, ending in a single `PASS` / `CONDITIONAL` / `FAIL` verdict and score. You get
+one report and one merged SARIF instead of seven to reconcile.
+
+Fanning the dimensions out to parallel read-only subagents is `audit`'s default and is
+opt-in authorization; `--inline` runs the same dimensions sequentially with identical
+consolidation and artifacts. Skipped dimensions are named in the report — an unrun
+dimension never reads as "clean".
+
+Output: `.docs/audits/{Vendor}_{Module}-audit-{date}.md|.json|.sarif`; each dimension's
+own artifacts stay under their usual category dirs. Reach for a single dimension's skill
+directly when you only want that one — the recipes below.
+
 **Security audit** — site-wide:
 
 ```
-/magento2-tools:magento2-security-audit --scope=site
+/magento2-tools:security --scope=site
 ```
 
-Dependency CVEs (`composer audit` + cached Adobe bulletins + optional OSV.dev), secret
+Dependency CVEs (live `composer audit` + Adobe patch-state via `vendor/bin/patch-status`), secret
 scanning (gitleaks/trufflehog or regex fallback), Magento-specific static patterns
 (anonymous REST resources, missing form keys, insecure cookie flags, risky
 `<preference>`s…), Marketplace coding-standard checks, and cross-module collision
@@ -364,14 +388,14 @@ severity-calibrated to PCI/GDPR impact. Output: Markdown + JSON + SARIF under
 **Performance audit** — static by default, runtime opt-in:
 
 ```
-/magento2-tools:magento2-performance-audit --scope=site            # static only
-/magento2-tools:magento2-performance-audit --runtime --scope=site  # + indexers, caches, queues, slow log
+/magento2-tools:perf-audit --scope=site            # static only
+/magento2-tools:perf-audit --runtime --scope=site  # + indexers, caches, queues, slow log
 ```
 
 **Compatibility scan** — before platform upgrades:
 
 ```
-/magento2-tools:magento2-module-upgrade --scan-only --to-magento=2.4.7 Acme_Checkout
+/magento2-tools:upgrade --scan-only --to-magento=2.4.7 Acme_Checkout
 ```
 
 Phases 0–2 only: Adobe UCT, Rector, PHPCS-Magento2, deprecation-map AST scan, composer

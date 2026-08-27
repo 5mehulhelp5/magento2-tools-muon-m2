@@ -65,7 +65,7 @@ Check the emitted JSON: `vendor`, `magento_root`, `runner_kind`, `magento_cli`,
 `edition`, `magento_version`, `php_version`, `theme.frontend`, and the `tools` block.
 Every value carries its `resolution_source` — if something is wrong, fix the source
 (CLAUDE.md hint or override) rather than working around it. The result is cached in
-`.claude/.cache/magento2-context.json` and reused by every other skill.
+`.claude/.cache/context.json` and reused by every other skill.
 
 Tip: add `.claude/.cache/` to `.gitignore`; the cache is per-machine.
 
@@ -77,12 +77,12 @@ For a real module, declare its **surfaces** — the toolkit's unit of scaffoldin
 Create a module OrderExport with persistence, service contracts, a REST API and admin config
 ```
 
-`magento2-module-create` maps that to surfaces (`core` is always included;
+`module-create` maps that to surfaces (`core` is always included;
 `persistence`, `service_contracts`, `rest_api`, `admin_config` here), presents a module
 profile (vendor, path, surfaces, estimated file count) for confirmation, then generates
 surface-by-surface from templates. What you get, and can rely on:
 
-- Every file passes the 12 `magento2-module-review` categories **on creation** — typed
+- Every file passes the 12 `review` categories **on creation** — typed
   constructors, strict types, PHPDoc on every public method, escaped templates,
   form-key-validated POST controllers, ACL-protected admin config, snake_case
   `{vendor}_{module}_{entity}` tables, DI preferences wired.
@@ -90,14 +90,14 @@ surface-by-surface from templates. What you get, and can rely on:
 - Everything is linted (`php -l`, `xmllint`, `composer validate`) before the skill
   reports done, and the creation checklist is shown per category.
 - Nothing touches the database: `setup:upgrade` / whitelist generation are offered as
-  explicit next steps, typically via `magento2-deploy`.
+  explicit next steps, typically via `deploy`.
 
 For a throwaway experiment, say `quick` or `skeleton` to get core files only.
 
 ## Step 5 — First deploy (local)
 
 ```
-/magento2-tools:magento2-deploy --env=local Acme_OrderExport
+/magento2-tools:deploy --env=local Acme_OrderExport
 ```
 
 Pre-flight checks run first (module files, composer validate, unit tests,
@@ -115,7 +115,7 @@ Implement a feature: export completed orders nightly as CSV to var/export, with 
 admin config screen for enabling it and choosing the export fields
 ```
 
-`magento2-feature-implement` will walk you through blueprint → (your approval) →
+`feature` will walk you through blueprint → (your approval) →
 module schema → task plan → (your approval) → execution with per-task reviews →
 unit tests + coverage → smoke battery → final report. Budget for reading the blueprint
 carefully — it is the contract for everything that follows, and changing it later costs
@@ -129,7 +129,7 @@ To make the orchestrator implement behaviour **test-first**, add `--tdd` (or set
 `Feature implement: tdd = on` in `CLAUDE.md` to make it the team default). The acceptance
 criteria in the plan then become failing tests written before each behaviour class, while
 scaffolding and config stay generated-then-covered. It's the same red → green → refactor
-loop `magento2-bug-fix` already uses — see
+loop `fix` already uses — see
 [Flows and scenarios](flows-and-scenarios.md#feature-implementation-flow).
 
 See [Flows and scenarios](flows-and-scenarios.md#feature-implementation-flow) for the
@@ -137,12 +137,12 @@ full phase diagram.
 
 ## Step 7 — Establish the testing baseline
 
-`magento2-test-generate` is the **backfiller** for code that already exists. If you
+`test-generate` is the **backfiller** for code that already exists. If you
 hand-wrote code outside the orchestrator (or are adopting the toolkit on a module that has
 no tests), backfill it:
 
 ```
-/magento2-tools:magento2-test-generate Acme_OrderExport
+/magento2-tools:test-generate Acme_OrderExport
 ```
 
 Discovery shows what's missing per test type (unit / integration / API / Jasmine /
@@ -161,7 +161,7 @@ Three integrations pay off immediately:
 1. **Deploy gate** — run pre-flight validation without deploying:
 
    ```
-   /magento2-tools:magento2-deploy --validate-only --strict --env=local Acme_OrderExport
+   /magento2-tools:deploy --validate-only --strict --env=local Acme_OrderExport
    ```
 
    Exit 0/1 plus a machine-readable `.docs/deployments/{ts}-local.json` with
@@ -171,7 +171,7 @@ Three integrations pay off immediately:
    to GitHub Code Scanning to get findings as PR annotations.
 
 3. **Conventional commits** — adopt `feat:` / `fix:` / `BREAKING CHANGE:` from the
-   first commit. `magento2-release` derives version bumps from them; without the
+   first commit. `release` derives version bumps from them; without the
    convention you'll be overriding versions by hand forever.
 
 ## Step 9 — First release
@@ -179,7 +179,7 @@ Three integrations pay off immediately:
 When the module is worth versioning:
 
 ```
-/magento2-tools:magento2-release Acme_OrderExport
+/magento2-tools:release Acme_OrderExport
 ```
 
 Validate (via the deploy pre-flight) → version proposal from commits → `composer.json`
@@ -199,6 +199,6 @@ one module per release invocation.
 - [ ] Quality tools installed as the project matures (`phpcs` + `magento/magento-coding-standard`, `phpstan`, `phpunit`) — skills use them automatically once present
 - [ ] CI: `--validate-only` deploy gate + SARIF upload
 - [ ] Conventional commits adopted
-- [ ] Decide on test-first: set `Feature implement: tdd = on` in `CLAUDE.md` to make feature behaviour test-first by default (bug-fix / EAV / data patches already are)
+- [ ] Decide on test-first: set `Feature implement: tdd = on` in `CLAUDE.md` to make feature behaviour test-first by default (`fix` / `eav-attribute` / data patches already are)
 - [ ] Decide whether `.docs/` (skill reports) is committed or ignored — committing it
       gives the team a shared history of blueprints, RCAs, deploys, and audits

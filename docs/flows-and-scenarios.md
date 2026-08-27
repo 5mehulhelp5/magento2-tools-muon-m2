@@ -6,33 +6,35 @@ and end-to-end scenario walkthroughs.
 
 ## Architecture: hub and spoke
 
-`magento2-context` is the universal leaf — every other skill resolves environment
+`context` is the universal leaf — every other skill resolves environment
 questions through it, and it depends on nothing. It also owns the shared findings
 emitters (JSON/SARIF) that every findings-emitting skill reuses.
-`magento2-feature-implement` is the top orchestrator.
+`feature` is the top orchestrator.
 
 ```mermaid
 graph TD
-    CTX[magento2-context<br/>hub: vendor, runner, CLI, versions, theme, tools<br/>+ shared JSON/SARIF emitters]
+    CTX[context<br/>hub: vendor, runner, CLI, versions, theme, tools<br/>+ shared JSON/SARIF emitters]
 
-    FI[magento2-feature-implement<br/>orchestrator]
-    BF[magento2-bug-fix]
-    MC[magento2-module-create]
-    MR[magento2-module-review]
-    TG[magento2-test-generate]
-    DEP[magento2-deploy]
-    UPG[magento2-module-upgrade]
-    REL[magento2-release]
-    SEC[magento2-security-audit]
-    PERF[magento2-performance-audit]
-    DBG[magento2-debug]
-    EAV[magento2-eav-attribute]
-    GQL[magento2-graphql-create]
-    FE[magento2-frontend-create]
-    DM[magento2-data-migration]
-    I18N[magento2-i18n]
+    FI[feature<br/>orchestrator: builds]
+    AUD[audit<br/>orchestrator: inspects]
+    BF[fix]
+    MC[module-create]
+    MR[review]
+    TG[test-generate]
+    DEP[deploy]
+    UPG[upgrade]
+    REL[release]
+    SEC[security]
+    PERF[perf-audit]
+    DBG[debug]
+    EAV[eav-attribute]
+    GQL[graphql]
+    FE[frontend]
+    DM[data-migration]
+    I18N[i18n]
 
     FI --> MC & MR & TG & EAV & GQL & FE & DM & DEP & BF & DBG & SEC & PERF
+    AUD --> MR & SEC & PERF
     BF --> MR & DEP & DM & DBG
     MC --> MR
     UPG --> MR & TG
@@ -48,6 +50,7 @@ graph TD
     MC -.-> CTX
     MR -.-> CTX
     FI -.-> CTX
+    AUD -.-> CTX
     BF -.-> CTX
     DEP -.-> CTX
     UPG -.-> CTX
@@ -64,40 +67,53 @@ graph TD
 ```
 
 Dotted edges: context resolution (all skills). Solid edges: workflow delegation.
+Only the skills with cross-skill edges are drawn; `audit` additionally dispatches `lint`,
+`a11y-audit`, `marketplace`, and `breeze-compat` where the module's surface warrants them,
+and the generator skills (`webapi`, `admin-form`, `admin-listing`, `system-config`,
+`cli-command`, `extension-point`, `message-queue`, `indexer`, `docs`, the `breeze-*`
+trio) all resolve through `context` and hand their output to `review`. The full graph is
+in the [repository README](../README.md).
+
+There are two orchestrators, and they are counterparts: `feature` **builds**, `audit`
+**inspects**.
 
 ### Shared infrastructure
 
-Four pieces keep the 33 skills consistent:
+Five pieces keep the 33 skills consistent:
 
 1. **The context document.** One JSON object (cached at
-   `.claude/.cache/magento2-context.json`) holding vendor, layout, edition, versions,
+   `.claude/.cache/context.json`) holding vendor, layout, edition, versions,
    the runner prefix, the Magento CLI command, theme, and tool paths. Skills consume
    `{ctx.*}` values and never re-resolve them independently. Missing tools are `null` —
    honest gaps, never invented paths.
 2. **The findings schema and severity scale.**
-   `skills/magento2-context/references/findings-schema.md` and
-   `skills/magento2-context/references/severity.md` define
-   one finding shape and one Critical/High/Medium/Low/Info scale. Review, security
-   audit, performance audit, and module upgrade all emit it, through the shared
-   `emit-json.sh` / `emit-sarif.sh` scripts owned by `magento2-module-review`.
+   `skills/context/references/findings-schema.md` and
+   `skills/context/references/severity.md` define
+   one finding shape and one Critical/High/Medium/Low/Info scale. `review`, `security`,
+   `perf-audit`, `lint`, `marketplace`, `a11y-audit`, `breeze-compat`, `upgrade`, and
+   `audit` all emit it. Scripted scanners funnel through one shared engine,
+   `context/scripts/findings-lib.sh` (scanner execution with JSON validation, per-scanner
+   stderr capture into `scanner_errors`, findings merge), and out through the shared
+   `emit-findings.sh` → `emit-json.sh` / `emit-sarif.sh` scripts — all owned by
+   `context`.
 3. **The `.docs/` artifact convention.** Every skill writes its durable outputs to a
    predictable folder in *your* project (see [artifact map](#artifact-map)).
-4. **Naming and placeholders.** `skills/magento2-context/references/naming.md` is the
+4. **Naming and placeholders.** `skills/context/references/naming.md` is the
    single naming authority; templates share a placeholder registry enforced by the
    repo's contract tests.
 5. **The test-first discipline.**
-   `skills/magento2-context/references/tdd-discipline.md` defines one red → green →
+   `skills/context/references/tdd-discipline.md` defines one red → green →
    refactor loop and the **behaviour/boilerplate line** (what is written test-first vs.
    exempt scaffold/config), plus the interface-first seam and a tiered fallback for when
-   no test DB is available. It is consumed by `magento2-bug-fix` (always), by
-   `magento2-feature-implement` under TDD mode, and by `magento2-data-migration` and
-   `magento2-eav-attribute` (test-first by default for the data/attribute effect).
+   no test DB is available. It is consumed by `fix` (always), by
+   `feature` under TDD mode, and by `data-migration` and
+   `eav-attribute` (test-first by default for the data/attribute effect).
 
 ---
 
 ## Feature implementation flow
 
-`magento2-feature-implement` — the orchestrator. Seven phases, two approval gates, one
+`feature` — the orchestrator. Seven phases, two approval gates, one
 bounded smoke loop.
 
 ```mermaid
@@ -125,27 +141,27 @@ flowchart TD
 Phases 3–4; only the blueprint gate), `spike` (reduced Phases 6–7, findings logged at
 Info).
 
-**Task types executed in Phase 5:** `M*` create module (→ `magento2-module-create`),
-`X*` modify existing, `R*` review (→ `magento2-module-review --diff`; Critical/High
-fixed before the next task), `T*` tests (→ `magento2-test-generate`), `E*` EAV
-attribute (→ `magento2-eav-attribute`), `G*` GraphQL (→ `magento2-graphql-create`),
+**Task types executed in Phase 5:** `M*` create module (→ `module-create`),
+`X*` modify existing, `R*` review (→ `review --diff`; Critical/High
+fixed before the next task), `T*` tests (→ `test-generate`), `E*` EAV
+attribute (→ `eav-attribute`), `G*` GraphQL (→ `graphql`),
 `V*` validate (PHPCS + PHPMD + PHPStan L8 + PHPUnit), `D*` deploy
-(→ `magento2-deploy`), `S*` smoke suites.
+(→ `deploy`), `S*` smoke suites.
 
 **Test-first (TDD mode, opt-in):** with `--tdd` (or `Feature implement: tdd = on` /
 `MAGENTO2_FI_TDD=1`; default off, `spike` exempt), Phase 5 implements behaviour-bearing
 `M*`/`X*` classes test-first — scaffold the signature, write the failing test from the
 task's acceptance criteria, watch it fail for the right reason, then fill the minimal
-body to green. The `T*` task then becomes a coverage top-up (via `magento2-test-generate`
+body to green. The `T*` task then becomes a coverage top-up (via `test-generate`
 on exempt/boilerplate classes) rather than the first author of behaviour tests. Pure
 scaffold/config (registration, DI, `module.xml`, plain DTOs, `db_schema`) stays
-generated-then-covered. See `magento2-context/references/tdd-discipline.md`.
+generated-then-covered. See `context/references/tdd-discipline.md`.
 
 **Smoke fix routing (S9):** new `exception.log` groups are triaged by
-`magento2-debug`, defects go to `magento2-bug-fix`, slow pages/N+1 to
-`magento2-performance-audit`, ACL/CSRF/escaping regressions to
-`magento2-security-audit`, JS/asset regressions to `magento2-frontend-create`,
-schema/data-patch regressions to `magento2-data-migration`. After any code fix the
+`debug`, defects go to `fix`, slow pages/N+1 to
+`perf-audit`, ACL/CSRF/escaping regressions to
+`security`, JS/asset regressions to `frontend`,
+schema/data-patch regressions to `data-migration`. After any code fix the
 modules are re-deployed and the loop re-enters at 6A (so unit tests are re-validated
 too).
 
@@ -159,7 +175,7 @@ re-asked. Blueprint `Status:` transitions: `Awaiting Approval` → `Approved` �
 
 ## Bug-fix flow
 
-`magento2-bug-fix` — surgical remediation, TDD-first, one gate.
+`fix` — surgical remediation, TDD-first, one gate.
 
 ```mermaid
 flowchart TD
@@ -172,7 +188,7 @@ flowchart TD
     P3[Phase 3 — RCA<br/>defect file:line, why, fix plan] --> G{Gate:<br/>RCA approved?}
     G -->|approved| P4
     P4[Phase 4 — TDD patch<br/>RED failing test → GREEN minimal patch → REFACTOR] --> P5
-    P5[Phase 5 — Review<br/>module-review --diff; fix new Crit/High] --> P6
+    P5[Phase 5 — Review<br/>review --diff; fix new Crit/High] --> P6
     P6[Phase 6 — Deploy<br/>optional, user-authorized<br/>re-run reproduction after] --> P7
     P7[Phase 7 — Report + severity class]
 ```
@@ -182,12 +198,12 @@ regression test required (waivers only for provably-untestable bugs or pure-conf
 changes validated by XSD, both recorded in the RCA and user-confirmed); `vendor/` never
 edited; per-phase `[bug-fix]` commits on the bugfix branch; the skill never pushes.
 
-Redirects: schema changes → `magento2-feature-implement --mode=extend`; data repairs →
-idempotent patch via `magento2-data-migration` (stays in-skill); hard-to-reproduce
-investigation → `magento2-debug`.
+Redirects: schema changes → `feature --mode=extend`; data repairs →
+idempotent patch via `data-migration` (stays in-skill); hard-to-reproduce
+investigation → `debug`.
 
-The red → green → refactor loop bug-fix applies is the shared
-`magento2-context/references/tdd-discipline.md` — the same discipline the test-first
+The red → green → refactor loop `fix` applies is the shared
+`context/references/tdd-discipline.md` — the same discipline the test-first
 builders below use.
 
 ---
@@ -205,11 +221,11 @@ flowchart LR
     P2 -.->|passes already, wrong test| P2
 ```
 
-- **`magento2-data-migration`** (Phase 2 *Test First, then Generate*): the integration
+- **`data-migration`** (Phase 2 *Test First, then Generate*): the integration
   test asserts post-migration state **and idempotency** (apply twice → identical rows, no
   duplicates, no error). Idempotency is the skill's headline guarantee, so it is pinned by
   a test rather than by inspection.
-- **`magento2-eav-attribute`** (Phase 3 *Test First, then Generate*): the integration test
+- **`eav-attribute`** (Phase 3 *Test First, then Generate*): the integration test
   asserts the attribute exists after the patch with the declared **scope** (`is_global`),
   `frontend_input`, and backend/source wiring, plus idempotency; behavioural source/backend
   models get a test-first unit test.
@@ -217,14 +233,14 @@ flowchart LR
   test-first *unit* test of the idempotency guard / behavioural model, with the integration
   gap recorded in the report — rather than skipping the discipline.
 
-These complement, not replace, `magento2-test-generate`, which remains the backfiller for
+These complement, not replace, `test-generate`, which remains the backfiller for
 modules whose code already exists (including ones with no tests at all).
 
 ---
 
 ## Deploy flow
 
-`magento2-deploy` — validate, plan, execute, smoke, report; rollback by recipe.
+`deploy` — validate, plan, execute, smoke, report; rollback by recipe.
 
 ```mermaid
 flowchart TD
@@ -250,13 +266,13 @@ snapshot script supports `--include-db` (mysqldump) precisely for this. Smoke fa
 after a completed deploy do *not* auto-rollback; they are reported for investigation.
 
 `--validate-only` stops after Phase 2 with an exit code — the building block
-`magento2-release` and CI pipelines use.
+`release` and CI pipelines use.
 
 ---
 
 ## Module upgrade flow
 
-`magento2-module-upgrade` — the change list is *derived from scanners*, not described
+`upgrade` — the change list is *derived from scanners*, not described
 by the user.
 
 ```mermaid
@@ -277,7 +293,7 @@ report with zero edits.
 
 ## Release flow
 
-`magento2-release` — semver from commits, gated push.
+`release` — semver from commits, gated push.
 
 ```mermaid
 flowchart LR
@@ -299,25 +315,28 @@ respected.
 ## Audit pipeline (security + performance)
 
 Both audits share one output pipeline: scanners → `build-findings.sh` → shared
-`emit-json.sh` + `emit-sarif.sh` → Markdown narrative written by the skill.
+`emit-json.sh` + `emit-sarif.sh` → Markdown narrative written by the skill. Each skill's
+`build-findings.sh` is a thin wrapper over the single engine
+`context/scripts/findings-lib.sh`, so scanner execution, JSON validation, `scanner_errors`
+capture, and the merge behave identically across every findings skill.
 
 ```mermaid
 flowchart LR
-    subgraph security [magento2-security-audit phases]
-        S2[Dependency CVEs<br/>composer audit, Adobe bulletins, OSV.dev]
+    subgraph security [security phases]
+        S2[Dependency advisories<br/>composer audit live, patch-status]
         S3[Secret scan<br/>gitleaks/trufflehog or regex pack]
         S4[Magento static patterns<br/>anonymous ACLs, form keys, cookies, preferences]
         S5[Coding standard<br/>phpcs --standard=Magento2]
         S6[Cross-module<br/>dual preferences, cycles, duplicate cron]
     end
-    subgraph performance [magento2-performance-audit phases]
+    subgraph performance [perf-audit phases]
         T2[Static pass<br/>N+1, full collections, cache identities,<br/>constructor work, un-batched cron/consumers]
         T3[Runtime pass — opt-in<br/>indexers, caches, queue backlog, slow log, Redis]
         T4[Blackfire/Tideways — optional]
     end
     S2 & S3 & S4 & S5 & S6 --> BF1[build-findings.sh]
     T2 & T3 & T4 --> BF2[build-findings.sh]
-    BF1 & BF2 --> EMIT[shared emit-json.sh + emit-sarif.sh<br/>owned by magento2-module-review]
+    BF1 & BF2 --> EMIT[shared emit-json.sh + emit-sarif.sh<br/>owned by context]
     EMIT --> OUT[.docs/audits/*.json + *.sarif<br/>+ Markdown narrative]
 ```
 
@@ -335,16 +354,21 @@ Where each skill stops and waits for you:
 
 | Skill | Gate(s) | What unlocks it |
 |-------|---------|-----------------|
-| `magento2-feature-implement` | Blueprint (Phase 2); task plan (Phase 4); smoke-loop halt at 5 iterations | "proceed" / "approved"; halt: `retry` / `accept-known-issues <IDs>` / `abort` |
-| `magento2-bug-fix` | RCA before any production-code change | "proceed" / "approved" |
-| `magento2-module-create` | Module profile confirm (multi-surface); full plan confirm at ≥3 surfaces or ≥20 files; parallel creation always opt-in | confirmation |
-| `magento2-test-generate` | Test plan before generation | "proceed" |
-| `magento2-eav-attribute` | File plan before generation | "proceed" |
-| `magento2-graphql-create` | Schema + resolver plan | approval |
-| `magento2-module-upgrade` | Scan report before applying (skipped by `--auto-fix`) | "proceed" |
-| `magento2-deploy` | Plan before execution (skipped by `--auto`, never on production); production interactive confirm; prod snapshot prompt | "proceed"; `--i-know-what-im-doing` for auto+prod |
-| `magento2-release` | Push/tag | literally typing `release` |
-| `magento2-module-review`, `magento2-debug`, audits, `magento2-i18n` | none — read-only or additive-report skills | — |
+| `feature` | Blueprint (Phase 2); task plan (Phase 4); smoke-loop halt at 5 iterations | "proceed" / "approved"; halt: `retry` / `accept-known-issues <IDs>` / `abort` |
+| `fix` | RCA before any production-code change | "proceed" / "approved" |
+| `module-create` | Module profile confirm (multi-surface); full plan confirm at ≥3 surfaces or ≥20 files; parallel creation always opt-in | confirmation |
+| `test-generate` | Test plan before generation | "proceed" |
+| `eav-attribute` | File plan before generation | "proceed" |
+| `graphql` | Schema + resolver plan | approval |
+| `upgrade` | Scan report before applying (skipped by `--auto-fix`) | "proceed" |
+| `deploy` | Plan before execution (skipped by `--auto`, never on production); production interactive confirm; prod snapshot prompt | "proceed"; `--i-know-what-im-doing` for auto+prod |
+| `release` | Push/tag | literally typing `release` |
+| `audit` | none for the analysis itself; fanning the dimensions out to subagents is opt-in authorization, exactly as `review`'s parallel mode is | `--agents`, or `execution_mode` in `.claude/m2.json` |
+| `review`, `debug`, the specialist audits, `i18n` | none — read-only or additive-report skills | — |
+
+Approval gates **always run in the main conversation**. Neither execution mode delegates
+a gate to a subagent — see
+[Configuration → Execution modes](configuration.md#execution-modes-agents-vs-inline).
 
 ---
 
@@ -354,23 +378,39 @@ Everything durable lands under `.docs/` in your project:
 
 ```
 .docs/
-├── {FeatureName}/                      # feature-implement: blueprint.md, plan.md,
+├── {FeatureName}/                      # feature: blueprint.md, plan.md,
 │   ├── blueprint.md                    #   tasks.md or tasks/, report.md,
 │   ├── plan.md                         #   guides/*.html, user-docs/*.html, spec.md
-│   └── ...
-├── bug-fixes/{slug}/                   # bug-fix: collect.md, reproduction.md, rca.md, report.md
-├── deployments/{ts}-{env}.md|.json     # deploy reports (+ .snapshot.tar.gz)
-├── reviews/{Module}-review-{date}.json # module-review JSON (+ .sarif)
-├── audits/security-{scope}-{date}.*    # security audit .md/.json/.sarif
-├── audits/perf-{scope}-{date}.*        # performance audit .md/.json/.sarif
-├── upgrades/{Module}-{from}-to-{to}-{date}.md|.json
-├── tests/{Module}-coverage-{date}.md   # test-generate coverage report
+│   └── ...                             #   (sub-skill output nests under this root too)
+├── spikes/{slug}/                      # feature --mode=spike
+├── bug-fixes/{slug}/                   # fix: collect.md, reproduction.md, rca.md, report.md
+├── deployments/{ts}-{env}.md|.json     # deploy reports (+ .snapshot.tar.gz, -preflight.json)
+├── reviews/{Vendor}_{Module}-review-{date}.*      # review .md/.json/.sarif
+├── audits/{Vendor}_{Module}-audit-{date}.*        # audit: consolidated + merged SARIF
+├── audits/security-{scope}-{date}.*               # security .md/.json/.sarif
+├── audits/perf-{scope}-{date}.*                   # perf-audit .md/.json/.sarif
+├── quality/{Vendor}_{Module}-quality-{date}.*     # lint .md/.json/.sarif
+├── accessibility/{Vendor}_{Module}-a11y-{date}.*  # a11y-audit .md/.json/.sarif
+├── marketplace/{Vendor}_{Module}-readiness-{date}.*   # marketplace readiness
+├── breeze-compat/{Vendor}_{Module}-breeze-compat-{date}.*
+├── upgrades/{Vendor}_{Module}-upgrade-{date}.md|.json
+├── tests/{Vendor}_{Module}-coverage-{date}.md     # test-generate coverage report
+├── docs-generated/{Vendor}_{Module}-{date}.md     # docs run report
 ├── eav-attributes/{Module}-{code}-{date}.md
 ├── migrations/{name}-{date}.md
 ├── i18n/{Module}-{date}.md
-├── debug/{mode}-{date}.md              # only with --save
-└── releases/{Module}-{Version}.md      # release notes
+├── debug/snapshot-{date}.md            # only with --save
+├── releases/{Module}-{Version}.md      # release notes
+└── …                                   # one run-report dir per generator skill:
+                                        #   adminhtml-forms/, adminhtml-listings/,
+                                        #   cli-commands/, extension-points/, indexers/,
+                                        #   message-queues/, system-config/
 ```
+
+Every path above is a *category* directory appended to the run's **output root** —
+`.docs` by default, or whatever `--docs-root={path}` sets. The authoritative registry of
+category names and filename tokens is
+`skills/context/references/artifact-layout.md`.
 
 Code artifacts go where Magento expects them: modules under
 `{magento_root}/app/code/{Vendor}/`, themes under `app/design/frontend/{Vendor}/`,
@@ -385,7 +425,7 @@ tests under each module's `Test/` tree, translations under each module's `i18n/`
 > *"Customers should be able to leave a pickup note at checkout; admins see it on the
 > order grid."*
 
-1. `magento2-feature-implement` picks `feature` mode, asks one batch of questions
+1. `feature` picks `feature` mode, asks one batch of questions
    (which checkout? REST or GraphQL exposure? Hyva or Luma?), writes the blueprint.
    **You approve it.**
 2. Module schema: one new module `Acme_PickupNotes` (surfaces: persistence,
@@ -395,12 +435,12 @@ tests under each module's `Test/` tree, translations under each module's `i18n/`
    suites. **You approve.**
 4. Execution: module created (every file review-clean on creation), reviewed, grid
    change applied and lint-checked, tests generated and passing, PHPCS/PHPStan/PHPUnit
-   green, deployed via `magento2-deploy`. *(With `--tdd` on, the service/observer
+   green, deployed via `deploy`. *(With `--tdd` on, the service/observer
    behaviour is written test-first instead — failing test from the acceptance criteria,
    then the minimal body — and `T1` only tops up coverage on the boilerplate.)*
 5. Smoke: REST scenario places an order with a note; admin grid renders; checkout flow
    completes; `exception.log` diff is clean. Suppose the grid 500s — the finding is
-   triaged by `magento2-debug`, fixed by `magento2-bug-fix`, re-deployed, and the loop
+   triaged by `debug`, fixed by `fix`, re-deployed, and the loop
    re-runs from unit tests. Bounded at 5 iterations.
 6. Final report in `.docs/PickupNotes/report.md`, plus an admin user guide in HTML.
 
@@ -408,41 +448,41 @@ tests under each module's `Test/` tree, translations under each module's `i18n/`
 
 > *"Since yesterday's deploy, some checkouts fail with a 500."*
 
-1. Triage read-only: `/magento2-tools:magento2-debug logs --since=24h
+1. Triage read-only: `/magento2-tools:debug logs --since=24h
    --pattern=checkout` groups the exceptions; `trace --method='…\QuoteManagement::placeOrder'`
    shows which plugin intercepts it.
-2. `magento2-bug-fix "checkout 500 — TypeError in Acme_GiftWrap plugin"` collects,
+2. `fix "checkout 500 — TypeError in Acme_GiftWrap plugin"` collects,
    reproduces (REST recipe), writes the RCA pointing at yesterday's commit. **You
    approve.**
 3. Failing regression test → minimal patch → suite green → `--diff` review →
-   `magento2-deploy --env=production --snapshot` (interactive confirm + DB-inclusive
+   `deploy --env=production --snapshot` (interactive confirm + DB-inclusive
    snapshot) → reproduction recipe re-run against production passes.
 4. `.docs/bug-fixes/checkout-500-giftwrap/` holds the full audit trail.
 
 ### Scenario 3 — Pre-launch hardening
 
-1. `/magento2-tools:magento2-security-audit --scope=site` — CVEs, secrets, anonymous
+1. `/magento2-tools:security --scope=site` — CVEs, secrets, anonymous
    endpoints, cross-module collisions. SARIF goes to Code Scanning.
-2. `/magento2-tools:magento2-performance-audit --runtime --scope=site` — static N+1 and
+2. `/magento2-tools:perf-audit --runtime --scope=site` — static N+1 and
    caching findings plus live indexer/queue/cache/slow-log checks.
-3. Remediation routes out per finding: dependency CVEs → `magento2-module-upgrade`,
-   code defects → `magento2-bug-fix`, each ending in a `--diff` review.
+3. Remediation routes out per finding: dependency CVEs → `upgrade`,
+   code defects → `fix`, each ending in a `--diff` review.
 4. Re-run both audits; diff the JSON artifacts to show the trend.
 
 ### Scenario 4 — Platform upgrade to Magento 2.4.7
 
-1. Per module: `/magento2-tools:magento2-module-upgrade --scan-only --to-magento=2.4.7
+1. Per module: `/magento2-tools:upgrade --scan-only --to-magento=2.4.7
    Acme_Checkout` — classified findings, zero edits.
 2. After reading the reports: re-run without `--scan-only`. **Approve the plan.**
    Rector auto-fixes commit per rule set; manual fixes commit per change; BC breaks are
    written to each module's `UPGRADE.md` for consumers.
 3. Tests run (generated first for uncovered modules), `--diff` review passes,
    per-module reports land in `.docs/upgrades/`.
-4. Deploy to staging via `magento2-deploy --env=staging --strict`.
+4. Deploy to staging via `deploy --env=staging --strict`.
 
 ### Scenario 5 — Release day
 
-1. `/magento2-tools:magento2-release Acme_OrderExport` — commits since
+1. `/magento2-tools:release Acme_OrderExport` — commits since
    `Acme_OrderExport-1.3.0` contain two `fix:` and one `feat:` → proposes `1.4.0`.
 2. Pre-flight validation passes (`deploy --validate-only --strict`).
 3. CHANGELOG and composer.json bumped; tag `Acme_OrderExport-1.4.0` created.
@@ -457,8 +497,8 @@ Day one for a developer joining a project that already uses the toolkit:
    team committed `.claude/settings.json`).
 2. *"Resolve the Magento context"* — see exactly how this project runs (Docker? `src/`
    layout? Hyva?) without reading a wiki.
-3. `/magento2-tools:magento2-debug snapshot` — current health of the local instance.
+3. `/magento2-tools:debug snapshot` — current health of the local instance.
 4. Read `.docs/` — recent feature blueprints, bug RCAs, deploy history: the project's
    engineering memory.
-5. First ticket: *"fix: …"* → `magento2-bug-fix` walks them through the house style —
+5. First ticket: *"fix: …"* → `fix` walks them through the house style —
    reproduction, RCA gate, TDD, review — by construction.

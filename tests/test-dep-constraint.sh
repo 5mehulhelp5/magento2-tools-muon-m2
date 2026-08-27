@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-dep-constraint.sh — contract test for the bounded-constraint resolver.
 #
-# magento2-context/scripts/resolve-dep-constraint.sh <vendor/package> [project_root] must:
+# context/scripts/resolve-dep-constraint.sh <vendor/package> [project_root] must:
 #   - resolve a package version from composer.lock and print a bounded `>=MAJOR.MINOR.0` floor;
 #   - strip a leading `v` from the locked version;
 #   - never emit a wildcard `*`;
@@ -10,7 +10,7 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-SCRIPT="skills/magento2-context/scripts/resolve-dep-constraint.sh"
+SCRIPT="skills/context/scripts/resolve-dep-constraint.sh"
 if [ ! -f "$SCRIPT" ]; then
     echo "FAIL: resolver not found at $SCRIPT"
     exit 1

@@ -28,21 +28,26 @@ deployment, auditing, upgrading, and releasing.
   `app/code/` to a scaffolded, reviewed, tested, deployed, and releasable first module,
   including team enablement and CI wiring.
 - **[Flows and scenarios](flows-and-scenarios.md)** — the deep dive: architecture
-  (hub-and-spoke around `magento2-context`), per-skill phase flows with diagrams, the
+  (hub-and-spoke around `context`), per-skill phase flows with diagrams, the
   approval-gate map, the artifact map, and six end-to-end scenario walkthroughs.
 - **[Skills reference](skills-reference.md)** — one compact section per skill:
   invocation, flags, phases, outputs, related skills.
 - **[Configuration](configuration.md)** — the context resolver and its cache,
-  environment variables (`M2_PHP_CONTAINER`, `M2_MAGENTO_ROOT`, `M2_CACHE_TTL`),
-  `.claude/m2.json`, `CLAUDE.md` hints the skills honor, and CI integration
-  (validate-only deploys, JSON/SARIF findings).
+  environment variables (`M2_PHP_CONTAINER`, `M2_MAGENTO_ROOT`, `M2_CACHE_TTL`, …),
+  `.claude/m2.json`, `CLAUDE.md` hints the skills honor, execution modes
+  (`--agents` / `--inline`, `execution_mode`), the `--docs-root` output root, and CI
+  integration (validate-only deploys, JSON/SARIF findings).
 
 ## Contributing to the toolkit itself
 
 The repository [README](../README.md) covers the repo layout, the contract-test harness
-(`bash tests/run-all.sh`), and skill versioning. Skill versions live in
-`skills/magento2-context/references/skill-versioning.md`; the plugin version lives in
-`.claude-plugin/plugin.json` (see [CHANGELOG.md](../CHANGELOG.md)).
+(`bash tests/run-all.sh`), and skill versioning. Each skill's version lives in its own
+`SKILL.md` frontmatter; the registry table in
+`skills/context/references/skill-versioning.md` is **generated** from that frontmatter by
+`skills/context/scripts/gen-versions.sh` and contract-tested for freshness, so edit the
+frontmatter and regenerate rather than editing the table. The plugin version lives in
+`.claude-plugin/plugin.json`, and [CHANGELOG.md](../CHANGELOG.md) is the durable record of
+what changed.
 
 ### This repository is public
 

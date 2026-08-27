@@ -4,7 +4,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-F=skills/magento2-feature-implement/SKILL.md
+F=skills/feature/SKILL.md
 FAIL=0
 
 # It must pass --docs-root=.docs/{FeatureName} to sub-skills.
