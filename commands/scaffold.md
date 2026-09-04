@@ -15,6 +15,7 @@ Match the request to the generator skill below and invoke THAT skill directly, f
 - a theme, RequireJS/Knockout/Alpine component, or email template → `magento2-tools:frontend`
 - an admin UI-component edit form → `magento2-tools:admin-form`
 - an admin UI-component grid/listing → `magento2-tools:admin-listing`
+- a CMS widget (etc/widget.xml + block + template, insertable from Content → Widgets) → `magento2-tools:widget`
 
 If the request is multi-surface or its scope is unclear, use `magento2-tools:feature` instead.
 If no specialist matches, default to the `magento2-tools:module-create` skill.

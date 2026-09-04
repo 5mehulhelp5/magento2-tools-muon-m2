@@ -1,6 +1,6 @@
 ---
 name: frontend
-version: 1.0.5
+version: 1.0.6
 description:
     Frontend-specific scaffolding for Magento 2 — themes, RequireJS modules, Knockout
     components, LESS/CSS, transactional email templates, static asset wiring. Use when
@@ -9,7 +9,8 @@ description:
     Breeze (Breezefront) stores — detected via magento2-tools:context (theme.breeze) — defer
     theme creation to magento2-tools:breeze-theme and Breeze widget/JS work to
     magento2-tools:breeze-adapt, since Breeze replaces RequireJS/Knockout/jQuery with
-    a Cash-based stack.
+    a Cash-based stack. For a CMS widget (etc/widget.xml, insertable from Content →
+    Widgets) use magento2-tools:widget.
 ---
 
 # Magento 2 Frontend Create

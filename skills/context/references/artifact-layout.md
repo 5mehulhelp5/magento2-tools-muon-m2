@@ -64,6 +64,7 @@ Markdown, JSON, and SARIF of one run share the basename apart from the extension
 | eav-attribute | `eav-attributes` | (run report) | LLM report |
 | extension-point | `extension-points` | (run report) | LLM report |
 | indexer | `indexers` | (run report) | LLM report |
+| widget | `widgets` | (run report) | LLM report |
 | message-queue | `message-queues` | (run report) | LLM report |
 | system-config | `system-config` | (run report) | LLM report |
 | data-migration | `migrations` | (run report) | LLM report |

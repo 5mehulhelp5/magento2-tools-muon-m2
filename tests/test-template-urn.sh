@@ -58,6 +58,8 @@ KNOWN_URNS=(
     urn:magento:module:Magento_Store:etc/config.xsd
     urn:magento:module:Magento_Ui:etc/ui_configuration.xsd
     urn:magento:module:Magento_Webapi:etc/webapi.xsd
+    urn:magento:module:Magento_Widget:etc/types.xsd
+    urn:magento:module:Magento_Widget:etc/widget.xsd
 )
 
 is_known() {

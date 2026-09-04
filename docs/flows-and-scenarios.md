@@ -79,7 +79,7 @@ There are two orchestrators, and they are counterparts: `feature` **builds**, `a
 
 ### Shared infrastructure
 
-Five pieces keep the 33 skills consistent:
+Five pieces keep the 34 skills consistent:
 
 1. **The context document.** One JSON object (cached at
    `.claude/.cache/context.json`) holding vendor, layout, edition, versions,

@@ -71,6 +71,9 @@ while IFS= read -r tpl; do
         -e 's/{id_column}/product_id/g' \
         -e 's/{source_table}/src_tbl/g' \
         -e 's/{target_table}/tgt_tbl/g' \
+        -e 's/{WidgetName}/PromoBanner/g' \
+        -e 's/{widget_id}/acme_mod_promo_banner/g' \
+        -e 's/{WidgetLabel}/Promo Banner/g' \
         "$tpl" > "$tmp"
 
     # MFTF templates use Magento's `{{_ENV.NAME}}` token, which is valid in MFTF DSL

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Every .php template under skills/*/templates/ must pass `php -l` after
+# Every .php and .phtml template under skills/*/templates/ must pass `php -l` after
 # substituting canonical placeholder values with valid PHP identifiers.
 set -uo pipefail
 
@@ -113,6 +113,10 @@ while IFS= read -r tpl; do
         -e 's/{reproducedReturn}/null/g' \
         -e 's/{what fails before the fix}/before/g' \
         -e 's/{what passes after the fix}/after/g' \
+        -e 's/{WidgetName}/PromoBanner/g' \
+        -e 's/{widget_id}/acme_mod_promo_banner/g' \
+        -e 's/{WidgetLabel}/Promo Banner/g' \
+        -e 's/{template_name}/promo_banner/g' \
         "$tpl" > "$tmp"
     result="$(php -l "$tmp" 2>&1)"
     if ! echo "$result" | grep -q 'No syntax errors detected'; then
@@ -121,6 +125,6 @@ while IFS= read -r tpl; do
         FAIL=1
     fi
     rm -f "$tmp"
-done < <(find skills -path '*/templates/*.php' -type f)
+done < <(find skills -path '*/templates/*' \( -name '*.php' -o -name '*.phtml' \) -type f)
 
 exit "$FAIL"

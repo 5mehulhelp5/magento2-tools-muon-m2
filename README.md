@@ -68,7 +68,7 @@ Developer documentation lives in [`docs/`](docs/README.md):
 
 ## Skills
 
-33 skills under `skills/`, each self-contained (`SKILL.md` + `references/` +
+34 skills under `skills/`, each self-contained (`SKILL.md` + `references/` +
 `scripts/` + `templates/`). Per-skill flags, phases, and outputs are documented in
 [docs/skills-reference.md](docs/skills-reference.md).
 
@@ -101,6 +101,7 @@ Developer documentation lives in [`docs/`](docs/README.md):
 | `lint` | Run the static-analysis gate (phpcs, phpstan, phpmd, php-cs-fixer, rector) and apply safe auto-fixes; emit residual violations as ranked findings (JSON + SARIF). |
 | `docs` | Generate or refresh a module's technical documentation from its own code — public @api surface, events, plugins, REST/GraphQL, DB schema, and more. For a module with REST routes it also emits OpenAPI 3.1, a JetBrains `.http` file, and a Postman collection under `docs/api/`. Never modifies source. |
 | `indexer` | Scaffold a custom indexer + materialized view (mview) on an existing module: indexer.xml, mview.xml subscriptions, an ActionInterface indexer class + batched action class. |
+| `widget` | Scaffold a CMS widget on an existing module: widget.xml declaration (parameters, containers, templates) + Magento_Widget dependency + a BlockInterface block with typed parameter accessors and a parameter-aware cache key + a theme-neutral phtml + unit/integration tests. |
 | `marketplace` | Assess an existing module's Adobe Marketplace / EQP submission readiness: composer metadata, licensing, structure, MFTF tests, docs, packaging hygiene. Read-only; emits a tiered scored report (JSON + SARIF, `outputKind=marketplace`). |
 | `a11y-audit` | Audit a module's/theme's storefront templates for WCAG 2.1 Level AA issues (alt text, labels, ARIA, headings, keyboard, contrast). Static-first; optional pa11y runtime pass. Read-only; emits ranked findings (JSON + SARIF, `outputKind=accessibility`). |
 | `breeze-theme` | Scaffold a Swissup Breeze (Breezefront) child theme: theme.xml `Swissup/breeze-*` parent + registration.php + composer.json + `web/css/breeze/_default.less` (`@critical`) + breeze-only layout. |
@@ -165,6 +166,7 @@ cli-command       ──► context, module-create, review, system-config
 extension-point   ──► context, module-create, review
 message-queue     ──► context, module-create, review
 indexer           ──► context, module-create, review, perf-audit
+widget            ──► context, module-create, review
 breeze-theme      ──► context
 breeze-adapt      ──► context, breeze-compat
 ```
@@ -247,7 +249,7 @@ detection. Changing any override busts the resolver cache automatically.
 .claude-plugin/
   plugin.json        # plugin manifest
   marketplace.json   # this repo doubles as its own marketplace ("muon-m2")
-skills/              # 33 skills (auto-discovered by Claude Code)
+skills/              # 34 skills (auto-discovered by Claude Code)
 commands/            # 16 /magento2-tools:<verb> shortcut commands (auto-discovered)
 agents/              # first-party read-only subagents: reviewer (per-dimension review) + explorer (code comprehension/tracing)
 hooks/               # PreToolUse guard: keeps .docs/ artifacts at the project root

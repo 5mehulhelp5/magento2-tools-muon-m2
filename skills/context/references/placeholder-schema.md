@@ -110,6 +110,19 @@ typed message DTO) are already registered above and are reused here. The DTO fac
 referenced in the publisher is the framework-generated `{EntityName}InterfaceFactory`
 (derived from `{EntityName}`, not a separate token).
 
+## Widget tokens (widget)
+
+CMS widget generator tokens:
+`{WidgetName}` (PascalCase widget block class name placed in `Block/Widget/`, e.g. `PromoBanner`),
+`{widget_id}` (snake_case unique widget identifier — the `<widget id>` in `widget.xml`, the CSS
+class suffix in the template, and the cache-key marker in the block, e.g. `acme_promo_banner`),
+`{WidgetLabel}` (human-readable widget label shown in the admin widget-type dropdown and the
+WYSIWYG insert dialog, e.g. `Promo Banner`).
+
+Note: `{template_name}` (the `.phtml` file name under `view/frontend/templates/widget/`) and
+`{Description}` (one-sentence description shown in admin) are already registered elsewhere in
+this document and are reused here — not duplicated.
+
 ## Theme / frontend tokens
 
 `{component}`, `{component-name-kebab}`, `{module-kebab-case}`, `{module-name-kebab}`,
@@ -366,6 +379,8 @@ TopicName
 VENDOR_UPPER
 Vendor
 Version
+WidgetLabel
+WidgetName
 YYYY-MM-DD
 action
 actual
@@ -471,4 +486,5 @@ vendor
 vendor_lower
 ver
 version
+widget_id
 ```

@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<!--
+    Widget declaration for {Vendor}_{Module}.
+    Target: {Vendor}/{Module}/etc/widget.xml  (merge — add this <widget> node to the existing file)
+
+    Tokens: {widget_id}, {Vendor}, {Module}, {WidgetName}, {WidgetLabel}, {Description}, {template_name}
+
+    Contract: every <containers>/<container>/<template value="..."> below must equal an
+    <option name="..."> of the `template` parameter, or that container offers no template in the
+    Content → Widgets form. Drop the whole <containers> block to allow every layout container.
+
+    Optional attributes on <widget>:
+      is_email_compatible="true"  — offer the widget inside email templates (JS-free, inline-styled output only)
+      placeholder_image="{Vendor}_{Module}::images/widget/{widget_id}.png" — WYSIWYG editor preview image
+      (ttl is declared by the XSD but never read by the config converter; use cache_lifetime instead)
+-->
+<widgets xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Widget:etc/widget.xsd">
+    <widget id="{widget_id}"
+            class="{Vendor}\{Module}\Block\Widget\{WidgetName}"
+            is_email_compatible="false">
+        <label translate="true">{WidgetLabel}</label>
+        <description translate="true">{Description}</description>
+        <parameters>
+            <parameter name="title" xsi:type="text" required="true" visible="true" sort_order="10">
+                <label translate="true">Title</label>
+                <description translate="true">Heading rendered above the widget content.</description>
+            </parameter>
+            <!--
+                Inline Yes/No options keep the module dependency-free and let selected="true" declare
+                the default. The alternative, source_model="Magento\Config\Model\Config\Source\Yesno",
+                cannot declare a default and adds Magento_Config to module.xml <sequence> + composer.json.
+            -->
+            <parameter name="show_title" xsi:type="select" visible="true" sort_order="20">
+                <label translate="true">Show Title</label>
+                <description translate="true">Hide the heading while keeping the title available to the template.</description>
+                <options>
+                    <option name="yes" value="1" selected="true">
+                        <label translate="true">Yes</label>
+                    </option>
+                    <option name="no" value="0">
+                        <label translate="true">No</label>
+                    </option>
+                </options>
+            </parameter>
+            <parameter name="items_count" xsi:type="text" required="true" visible="true" sort_order="30">
+                <label translate="true">Number of Items</label>
+                <description translate="true">Maximum number of items to render. Positive integer.</description>
+                <value>5</value>
+            </parameter>
+            <parameter name="template" xsi:type="select" required="true" visible="true" sort_order="40">
+                <label translate="true">Template</label>
+                <options>
+                    <option name="default" value="{Vendor}_{Module}::widget/{template_name}.phtml" selected="true">
+                        <label translate="true">{WidgetLabel} — Default Template</label>
+                    </option>
+                </options>
+            </parameter>
+        </parameters>
+        <containers>
+            <container name="content">
+                <template name="default" value="default"/>
+            </container>
+            <container name="sidebar.main">
+                <template name="default" value="default"/>
+            </container>
+            <container name="sidebar.additional">
+                <template name="default" value="default"/>
+            </container>
+        </containers>
+    </widget>
+</widgets>

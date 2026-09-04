@@ -95,7 +95,76 @@ function hasCommand(bin, argv) {
 }
 
 async function tryImport(name) {
-  try { return await import(name); } catch { return null; }
+  // A bare `import(name)` resolves relative to THIS file, i.e. the skill's own directory inside
+  // the toolchain checkout — where playwright is not installed. Projects install it in their own
+  // node_modules, so that lookup failed and pickBackend() fell through to a false
+  // "no headless browser backend available" (exit 78) on boxes where the browser works fine.
+  //
+  // Try the skill-relative path first (a globally installed lib still resolves), then the
+  // project's, resolved from the invocation cwd upward.
+  try {
+    const lib = normaliseBrowserModule(await import(name));
+
+    if (lib) return lib;
+  } catch { /* fall through to the project lookup */ }
+
+  try {
+    // Everything needed is imported here rather than at module scope: this file's import block
+    // varies between versions, and a missing top-level binding would throw a ReferenceError that
+    // the catch below swallows -- reproducing the very false "no browser" verdict this fixes.
+    const { createRequire } = await import("node:module");
+    const { join } = await import("node:path");
+    const { pathToFileURL } = await import("node:url");
+
+    // createRequire walks up from this path, so a project that installs the browser anywhere
+    // above the invocation cwd resolves.
+    const req = createRequire(join(process.cwd(), "package.json"));
+
+    const mod = await import(pathToFileURL(req.resolve(name)).href);
+
+    // playwright and puppeteer ship CommonJS entry points. Imported dynamically, their exports
+    // land under `.default`, so the namespace itself has no `chromium`/`launch` -- which surfaced
+    // as "Cannot read properties of undefined (reading 'launch')" rather than as a resolution
+    // failure. Hand back whichever shape actually carries the API.
+    return normaliseBrowserModule(mod);
+  } catch { return null; }
+}
+
+/**
+ * Return the object that actually carries the browser API, ESM namespace or CJS default alike,
+ * or null when neither shape does.
+ *
+ * Returning the module regardless would make a resolved-but-unusable package look like a working
+ * backend, and pickBackend() would hand it to openPage() -- which is where the missing API
+ * resurfaces as "Cannot read properties of undefined (reading 'launch')" instead of the honest
+ * exit 78.
+ */
+function normaliseBrowserModule(mod) {
+  if (mod?.chromium || mod?.launch) return mod;
+  if (mod?.default?.chromium || mod?.default?.launch) return mod.default;
+
+  return null;
+}
+
+/**
+ * Click the first selector in `selectors` that is actually present, and report which one.
+ *
+ * A CSS selector list ("a, b, c") is NOT a priority list: Playwright and Puppeteer both resolve
+ * it to the first match in DOCUMENT order, so a generic fallback that happens to sit higher in
+ * the page beats the specific selector meant to take precedence. That is not academic on a Luma
+ * storefront: the header search box is `<button type="submit">` and precedes every form, so a
+ * `button[type="submit"]` fallback submits the SEARCH form instead of the login form and the
+ * step "passes" having done nothing. Trying the selectors one at a time restores the intended
+ * precedence, and a miss throws naming everything tried instead of clicking something random.
+ */
+async function clickFirst(page, selectors, what) {
+  for (const sel of selectors) {
+    if (await page.$(sel)) {
+      await page.click(sel);
+      return sel;
+    }
+  }
+  throw new Error(`no ${what} found; tried: ${selectors.join("  |  ")}`);
 }
 
 // ---------- commands ----------
@@ -117,7 +186,15 @@ async function adminLogin(backend, args) {
     await page.fill('input[name="login[password]"]', pass);
     await Promise.all([
       page.waitForNavigation({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {}),
-      page.click('button[type="submit"]'),
+      // Magento_Backend::admin/login_buttons.phtml renders `<button class="action-login
+      // action-primary">` with NO type attribute. `button[type="submit"]` matches the attribute,
+      // not the HTML default, so the old selector never matched the admin submit at all.
+      clickFirst(page, [
+        "#login-form button.action-login",
+        "button.action-login.action-primary",
+        '#login-form button[type="submit"]',
+        "#login-form button",
+      ], "admin login submit button"),
     ]);
     if (screenshot) await safeScreenshot(page, screenshot);
     const dashUrl = page.url();
@@ -276,7 +353,12 @@ async function customerFlow(backend, args) {
     await page.fill('input[name="password_confirmation"]', pass);
     await Promise.all([
       page.waitForNavigation({ timeout: 30000 }).catch(() => {}),
-      page.click('button[type="submit"]'),
+      // Scoped to the account form: an unscoped submit selector hits the header search button.
+      clickFirst(page, [
+        '#form-validate button[type="submit"]',
+        ".form-create-account button.action.submit",
+        '.form-create-account button[type="submit"]',
+      ], "create-account submit button"),
     ]);
     steps.push({ step: "register", url: page.url(), consoleErrors: [...consoleErrors] });
     consoleErrors.length = 0;
@@ -292,7 +374,12 @@ async function customerFlow(backend, args) {
     await page.fill('input[name="login[password]"]', pass);
     await Promise.all([
       page.waitForNavigation({ timeout: 30000 }).catch(() => {}),
-      page.click('button[type="submit"]'),
+      // `#send2` is the id Magento_Customer::form/login.phtml puts on the submit button.
+      clickFirst(page, [
+        "#send2",
+        'form.form-login button[type="submit"]',
+        '.login-container button[type="submit"]',
+      ], "customer login submit button"),
     ]);
     steps.push({ step: "login", url: page.url(), consoleErrors: [...consoleErrors] });
     consoleErrors.length = 0;
@@ -350,7 +437,9 @@ async function openPage(backend, opts = {}) {
 
   if (backend.kind === "playwright") {
     const browser = await backend.lib.chromium.launch({ headless: true });
-    const context = await browser.newContext();
+    // ignoreHTTPSErrors is required, not optional: local Magento stacks are routinely served over
+    // a self-signed cert, and without this every navigation fails ERR_CERT_AUTHORITY_INVALID.
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
     if (opts.cookieFile && existsSync(opts.cookieFile)) {
       try {
         // ESM has no `require`; use the imported readFileSync (FI-7).
@@ -378,7 +467,14 @@ async function openPage(backend, opts = {}) {
   }
 
   if (backend.kind === "puppeteer") {
-    const browser = await backend.lib.launch({ headless: "new" });
+    // Same self-signed-cert reason as the Playwright context above. Puppeteer renamed the option
+    // in v22 (ignoreHTTPSErrors -> acceptInsecureCerts); pass both so either version honours it and
+    // the other ignores an unknown key.
+    const browser = await backend.lib.launch({
+      headless: "new",
+      ignoreHTTPSErrors: true,
+      acceptInsecureCerts: true,
+    });
     const rawPage = await browser.newPage();
     if (opts.cookieFile && existsSync(opts.cookieFile)) {
       try {

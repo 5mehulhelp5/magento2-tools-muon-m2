@@ -600,6 +600,36 @@ the ActionInterface name-clash resolution. Use for "add a custom index". Dimensi
 - **Related:** use `module-create` first if the module does not exist; to
   review or diagnose existing indexer performance use `perf-audit`.
 
+### widget
+
+Scaffold a CMS widget onto an **existing** module: the `etc/widget.xml` declaration
+(parameters, containers, `template` options), the `Magento_Widget` sequence + composer
+dependency, a `BlockInterface` block with typed parameter accessors and a parameter-aware
+`getCacheKeyInfo()`, a theme-neutral `.phtml` template, and unit + integration tests.
+Bakes in the contracts that fail silently — every parameter arrives as a string, blank
+parameters are dropped, container templates must name `template` options, and a block
+without `BlockInterface` renders as an empty string. Use for "add a widget" / "make X
+insertable from Content → Widgets". Not for jQuery-UI `$.widget` / Breeze JS widgets
+(`frontend` / `breeze-adapt`).
+
+- **Invocation:** *"add a promo banner widget to Acme_Promo"*;
+  *"create a widget.xml for a CMS block picker in Acme_Content"*;
+  `--module=Acme_Promo --class=PromoBanner --label="Promo Banner" --description="Configurable promotional banner"`.
+- **Phases:** resolve context (hard-stop if module absent — offer `module-create`; read
+  the theme for follow-up notes) → resolve inputs (class, id, label, description,
+  parameters, containers, email compatibility) → plan (gate) → **test-first** (3A: unit
+  test on a mocked `Template\Context` asserting defaults, string coercion and cache-key
+  variance; integration test asserting the merged widget config and a frontend render) →
+  generate from templates → verify (`php -l`, `xmllint`, `review --diff`) → report.
+- **Outputs:** `etc/widget.xml` (merge), `etc/module.xml` (merge), `composer.json` (merge),
+  `Block/Widget/{WidgetName}.php`, `view/frontend/templates/widget/{template_name}.phtml`,
+  `Test/Unit/Block/Widget/{WidgetName}Test.php`,
+  `Test/Integration/Widget/{WidgetName}DeclarationTest.php`;
+  `.docs/widgets/{Vendor}_{Module}-{widget_id}-{date}.md` (includes the three placement
+  paths — widget instance, WYSIWYG/directive, layout XML — and the cache-clean commands).
+- **Related:** use `module-create` first if the module does not exist; JS behaviour for the
+  widget goes through `frontend` (Luma/Hyvä) or `breeze-adapt` (Breeze).
+
 ### docs
 
 Generate or refresh a module's **technical documentation** from its own code — public
@@ -723,6 +753,7 @@ key ones.
 | Read-only log/DI/queue inspection, one session | `debug` | `perf-audit` |
 | Generate module technical documentation from code | `docs` | `review` |
 | Add a custom indexer + mview | `indexer` | `module-create` / `perf-audit` |
+| Add a CMS widget (etc/widget.xml, Content → Widgets, widget directive) | `widget` | `frontend` / `breeze-adapt` |
 | Scaffold a Breeze (Swissup) child theme | `breeze-theme` | `frontend` |
 | Adapt an existing module to Breeze (companion module) | `breeze-adapt` | `extension-point` / `breeze-compat` |
 | Check if a module is Breeze-compatible (static) | `breeze-compat` | `review` / `breeze-adapt` |
