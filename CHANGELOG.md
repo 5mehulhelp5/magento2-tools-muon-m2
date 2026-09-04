@@ -16,7 +16,8 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   parameter accessors and a parameter-aware `getCacheKeyInfo()`, a theme-neutral `.phtml`,
   and unit + integration tests. Test-first like the other generators: the unit test runs on
   a mocked `Template\Context` (no Magento bootstrap) and pins defaults, string coercion and
-  cache-key variance; the integration test asserts the merged widget config and a frontend
+  cache-key variance (asserting the appended tail of `getCacheKeyInfo()` exactly, since a bare
+  containment check can be satisfied by the parent's own entries); the integration test asserts the merged widget config and a frontend
   render, or skips with its exact reason.
   What it bakes in is the set of widget contracts that fail **silently**: a block without
   `BlockInterface` renders as an empty string with no error; every parameter arrives as a
@@ -47,9 +48,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   certificate** (`ERR_CERT_AUTHORITY_INVALID`). Both backends now accept insecure certs:
   `ignoreHTTPSErrors` on the Playwright context, and `ignoreHTTPSErrors` +
   `acceptInsecureCerts` (Puppeteer renamed it in v22) at Puppeteer launch.
-- **`feature` — admin login clicked the wrong button.** The Magento admin submit button is
-  `button.action-login.action-primary`, which `button[type="submit"]` alone did not reliably
-  reach; the selector list now names it first and keeps the generic fallback.
+- **`feature` — the login steps clicked the wrong button, on both admin and storefront.** A CSS
+  selector list is not a priority list: Playwright and Puppeteer resolve `"a, b, c"` to the first
+  match in *document* order, so a generic fallback higher up the page beats the specific selector
+  meant to win. On a Luma storefront the header search box is `<button type="submit">` and
+  precedes every form, so the customer login/register steps submitted the **search** form and
+  reported success having done nothing. Admin was worse: `Magento_Backend`'s
+  `admin/login_buttons.phtml` renders `<button class="action-login action-primary">` with **no
+  `type` attribute**, and `button[type="submit"]` matches the attribute rather than the HTML
+  default — so it never matched the admin submit at all. All three steps now go through a
+  `clickFirst()` helper that tries form-scoped selectors one at a time in real priority order and
+  throws naming every selector it tried rather than clicking something arbitrary.
 
 ### Changed
 

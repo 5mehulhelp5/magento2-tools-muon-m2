@@ -79,12 +79,13 @@ class {WidgetName}Test extends TestCase
             'show_title' => '1',
         ]);
 
-        $keyInfo = $block->getCacheKeyInfo();
+        // Assert the appended tail exactly, not `assertContains(3, ...)` / `assertContains(1, ...)`:
+        // a bare scalar could also be contributed by parent::getCacheKeyInfo(), so a containment
+        // check can pass while the parameter was never appended at all. Pinning the segment also
+        // pins its order and its types (the bool arrives as int 1, not "1" or true).
+        $appended = array_slice(array_values($block->getCacheKeyInfo()), -4);
 
-        self::assertContains('{widget_id}', $keyInfo);
-        self::assertContains('Summer Sale', $keyInfo);
-        self::assertContains(3, $keyInfo);
-        self::assertContains(1, $keyInfo);
+        self::assertSame(['{widget_id}', 'Summer Sale', 3, 1], $appended);
     }
 
     /**
@@ -124,9 +125,9 @@ class {WidgetName}Test extends TestCase
      */
     private function createBlock(array $data = []): {WidgetName}
     {
+        // Only getCode() matters: parent::getCacheKeyInfo() keys on the store CODE, never its id.
         $store = $this->createMock(StoreInterface::class);
         $store->method('getCode')->willReturn('default');
-        $store->method('getId')->willReturn(1);
 
         $storeManager = $this->createMock(StoreManagerInterface::class);
         $storeManager->method('getStore')->willReturn($store);

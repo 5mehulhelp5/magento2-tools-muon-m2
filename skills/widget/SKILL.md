@@ -169,7 +169,9 @@ The unit test must:
 - Assert string coercion: `'12'` → `12`, `'0'` → `false`, `'1'` → `true`.
 - Assert the invalid counts `'0'`, `'-3'`, `'abc'`, `''` each fall back to the default (one
   test, one assertion per value with a message naming the value).
-- Assert `getCacheKeyInfo()` contains the parameter values, is identical for two blocks
+- Assert `getCacheKeyInfo()`'s appended tail equals the parameter values exactly (order and
+  types included — a bare `assertContains` can be satisfied by the parent's own entries), is
+  identical for two blocks
   with identical parameters, and differs when **any** parameter differs (`title`,
   `items_count`, `show_title` each get a case).
 - No `markTestIncomplete`, no `self::assertTrue(true)`.

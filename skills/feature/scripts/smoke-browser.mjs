@@ -146,6 +146,27 @@ function normaliseBrowserModule(mod) {
   return null;
 }
 
+/**
+ * Click the first selector in `selectors` that is actually present, and report which one.
+ *
+ * A CSS selector list ("a, b, c") is NOT a priority list: Playwright and Puppeteer both resolve
+ * it to the first match in DOCUMENT order, so a generic fallback that happens to sit higher in
+ * the page beats the specific selector meant to take precedence. That is not academic on a Luma
+ * storefront: the header search box is `<button type="submit">` and precedes every form, so a
+ * `button[type="submit"]` fallback submits the SEARCH form instead of the login form and the
+ * step "passes" having done nothing. Trying the selectors one at a time restores the intended
+ * precedence, and a miss throws naming everything tried instead of clicking something random.
+ */
+async function clickFirst(page, selectors, what) {
+  for (const sel of selectors) {
+    if (await page.$(sel)) {
+      await page.click(sel);
+      return sel;
+    }
+  }
+  throw new Error(`no ${what} found; tried: ${selectors.join("  |  ")}`);
+}
+
 // ---------- commands ----------
 
 async function adminLogin(backend, args) {
@@ -165,7 +186,15 @@ async function adminLogin(backend, args) {
     await page.fill('input[name="login[password]"]', pass);
     await Promise.all([
       page.waitForNavigation({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {}),
-      page.click('button.action-login, button.action-primary, button[type="submit"]'),
+      // Magento_Backend::admin/login_buttons.phtml renders `<button class="action-login
+      // action-primary">` with NO type attribute. `button[type="submit"]` matches the attribute,
+      // not the HTML default, so the old selector never matched the admin submit at all.
+      clickFirst(page, [
+        "#login-form button.action-login",
+        "button.action-login.action-primary",
+        '#login-form button[type="submit"]',
+        "#login-form button",
+      ], "admin login submit button"),
     ]);
     if (screenshot) await safeScreenshot(page, screenshot);
     const dashUrl = page.url();
@@ -324,7 +353,12 @@ async function customerFlow(backend, args) {
     await page.fill('input[name="password_confirmation"]', pass);
     await Promise.all([
       page.waitForNavigation({ timeout: 30000 }).catch(() => {}),
-      page.click('button.action-login, button.action-primary, button[type="submit"]'),
+      // Scoped to the account form: an unscoped submit selector hits the header search button.
+      clickFirst(page, [
+        '#form-validate button[type="submit"]',
+        ".form-create-account button.action.submit",
+        '.form-create-account button[type="submit"]',
+      ], "create-account submit button"),
     ]);
     steps.push({ step: "register", url: page.url(), consoleErrors: [...consoleErrors] });
     consoleErrors.length = 0;
@@ -340,7 +374,12 @@ async function customerFlow(backend, args) {
     await page.fill('input[name="login[password]"]', pass);
     await Promise.all([
       page.waitForNavigation({ timeout: 30000 }).catch(() => {}),
-      page.click('button.action-login, button.action-primary, button[type="submit"]'),
+      // `#send2` is the id Magento_Customer::form/login.phtml puts on the submit button.
+      clickFirst(page, [
+        "#send2",
+        'form.form-login button[type="submit"]',
+        '.login-container button[type="submit"]',
+      ], "customer login submit button"),
     ]);
     steps.push({ step: "login", url: page.url(), consoleErrors: [...consoleErrors] });
     consoleErrors.length = 0;
