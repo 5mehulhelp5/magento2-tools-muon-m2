@@ -5,7 +5,7 @@ Status: Awaiting Approval
 Blueprint: `.docs/{FeatureName}/blueprint.md`
 Skill versions:
 
-- feature@2.15.1
+- feature@2.15.2
   - context@1.14.0
 
 ---

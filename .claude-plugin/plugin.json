@@ -24,6 +24,7 @@
     "security-audit",
     "performance",
     "deployment",
-    "ui-component"
+    "ui-component",
+    "widget"
   ]
 }

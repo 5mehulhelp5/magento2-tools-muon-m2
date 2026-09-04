@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!--
+    Module declaration for {Vendor}_{Module}.
+    Target: {Vendor}/{Module}/etc/module.xml  (merge — add Magento_Widget to the existing
+    <sequence>, or add the <sequence> block when the module has none; never add setup_version)
+
+    Magento_Widget must be declared as a dependency so the widget framework is guaranteed to be
+    installed and loaded first. Pair with composer.json:
+        "require": { "magento/module-widget": "<bounded constraint from resolve-dep-constraint.sh>" }
+    Borrowing a core chooser (block-type parameter) adds its module too: Magento_Cms, Magento_Catalog.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Module/etc/module.xsd">
+    <module name="{Vendor}_{Module}">
+        <sequence>
+            <module name="Magento_Widget"/>
+        </sequence>
+    </module>
+</config>

@@ -48,7 +48,8 @@ check lint magento2-tools:review
 check indexer magento2-tools:module-create magento2-tools:perf-audit
 check marketplace magento2-tools:security magento2-tools:release
 check a11y-audit magento2-tools:frontend magento2-tools:review
-check frontend magento2-tools:breeze-theme magento2-tools:breeze-adapt
+check frontend magento2-tools:breeze-theme magento2-tools:breeze-adapt magento2-tools:widget
+check widget magento2-tools:module-create magento2-tools:frontend magento2-tools:breeze-adapt
 check breeze-theme magento2-tools:frontend
 check breeze-adapt magento2-tools:extension-point magento2-tools:breeze-compat
 check breeze-compat magento2-tools:review magento2-tools:breeze-adapt

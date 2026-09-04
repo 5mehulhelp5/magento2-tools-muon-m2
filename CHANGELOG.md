@@ -6,6 +6,60 @@ individual skill versions are tracked in each SKILL.md frontmatter and the gener
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — CMS widgets are a scaffold, not a copy-paste from a blog post
+
+### Added
+
+- **New skill `widget`** (34th) — scaffolds a CMS widget onto an **existing** module:
+  `etc/widget.xml` (parameters, `<containers>`, `template` options), the `Magento_Widget`
+  `<sequence>` + bounded `composer.json` requirement, a `BlockInterface` block with typed
+  parameter accessors and a parameter-aware `getCacheKeyInfo()`, a theme-neutral `.phtml`,
+  and unit + integration tests. Test-first like the other generators: the unit test runs on
+  a mocked `Template\Context` (no Magento bootstrap) and pins defaults, string coercion and
+  cache-key variance; the integration test asserts the merged widget config and a frontend
+  render, or skips with its exact reason.
+  What it bakes in is the set of widget contracts that fail **silently**: a block without
+  `BlockInterface` renders as an empty string with no error; every parameter arrives as a
+  string, so `"0"` from a Yes/No select is truthy; blank parameters are dropped from the
+  saved instance, so `<value>` is a form seed and never a runtime default; the inherited
+  `getCacheKeyInfo()` ignores parameters, so two instances share one cached fragment the
+  moment `cache_lifetime` is set anywhere; and each `<container>/<template value>` must
+  equal an `<option name>` of the `template` parameter or that container's template dropdown
+  is empty. Three references carry the rest — `widget-anatomy.md` (structure, the three
+  entry points and how parameters travel each one, the schema-validation catalog recipe),
+  `parameter-types.md` (the `xsi:type` matrix and each type's runtime shape), and
+  `pitfalls.md` (17 entries).
+  Routed from `/magento2-tools:scaffold`; `frontend` now defers CMS widgets to it and keeps
+  jQuery-UI/Breeze JS `$.widget` work (`frontend` 1.0.5 → 1.0.6, description only).
+
+### Fixed
+
+- **`feature` 2.15.1 → 2.15.2 — Phase 6B reported "no headless browser backend available"
+  on machines where the browser worked.** `smoke-browser.mjs` resolved `playwright` /
+  `puppeteer` with a bare dynamic `import()`, which resolves relative to the *script's* own
+  directory inside the plugin checkout — never the project's `node_modules`. The probe now
+  falls back to a `createRequire()` lookup walking up from the invocation cwd, and unwraps
+  the CommonJS `.default` those packages present when imported dynamically (the shape that
+  surfaced as "Cannot read properties of undefined (reading 'launch')" rather than as a
+  resolution failure). A module that resolves but carries no browser API is now rejected, so
+  the honest exit 78 is still reachable.
+- **`feature` — smoke suites failed every navigation against local stacks on a self-signed
+  certificate** (`ERR_CERT_AUTHORITY_INVALID`). Both backends now accept insecure certs:
+  `ignoreHTTPSErrors` on the Playwright context, and `ignoreHTTPSErrors` +
+  `acceptInsecureCerts` (Puppeteer renamed it in v22) at Puppeteer launch.
+- **`feature` — admin login clicked the wrong button.** The Magento admin submit button is
+  `button.action-login.action-primary`, which `button[type="submit"]` alone did not reliably
+  reach; the selector list now names it first and keeps the generic fallback.
+
+### Changed
+
+- Contract tests extended for the new skill: `test-template-php-lint.sh` now lints `.phtml`
+  templates as well as `.php` (widget templates are PHP), `test-template-urn.sh` learns the
+  `Magento_Widget` `widget.xsd` / `types.xsd` URNs, and the widget tokens
+  (`{WidgetName}`, `{widget_id}`, `{WidgetLabel}`) are registered in `placeholder-schema.md`
+  with substitutions in both template-lint tests. `test-source-of-truth-rollout.sh` reports
+  its generator count from the list instead of a hard-coded 18.
+
 ## [2.0.0] — 2026-08-27 — live security sources, one findings engine, short names
 
 The 1.x line accumulated three kinds of weight this release removes. A hand-curated CVE

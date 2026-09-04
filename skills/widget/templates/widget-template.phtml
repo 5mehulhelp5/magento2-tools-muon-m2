@@ -1,0 +1,23 @@
+<?php
+/**
+ * {WidgetLabel} widget template.
+ *
+ * Target: {Vendor}/{Module}/view/frontend/templates/widget/{template_name}.phtml
+ *
+ * Theme-neutral on purpose: plain PHP + semantic HTML, no jQuery / Knockout / RequireJS /
+ * data-mage-init, so the same file renders under Luma, Hyvä and Breeze. Read every value
+ * through the block's typed accessors (never getData()) and escape every output.
+ * Interactive behaviour is a separate task for the `frontend` or `breeze-adapt` skill.
+ *
+ * @var \{Vendor}\{Module}\Block\Widget\{WidgetName} $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<div class="widget widget-{widget_id}">
+    <?php if ($block->isShowTitle() && $block->getTitle() !== ''): ?>
+        <h2 class="widget-title"><?= $escaper->escapeHtml($block->getTitle()) ?></h2>
+    <?php endif; ?>
+    <div class="widget-content" data-items-count="<?= $escaper->escapeHtmlAttr((string) $block->getItemsCount()) ?>">
+        <?= $escaper->escapeHtml(__('Showing up to %1 item(s).', $block->getItemsCount())) ?>
+    </div>
+</div>

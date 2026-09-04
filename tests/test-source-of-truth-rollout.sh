@@ -9,7 +9,7 @@ IN_SCOPE=(
   module-create frontend graphql webapi
   admin-form admin-listing extension-point system-config
   cli-command eav-attribute message-queue data-migration
-  indexer breeze-theme breeze-adapt
+  indexer breeze-theme breeze-adapt widget
   docs test-generate feature
 )
 OUT_OF_SCOPE=(
@@ -35,5 +35,5 @@ for s in "${OUT_OF_SCOPE[@]}"; do
         && { echo "FAIL: $f (read-only/audit) must NOT reference source-of-truth.md"; FAIL=1; }
 done
 
-[ "$FAIL" -eq 0 ] && echo "PASS: all 18 generators carry the rule; audit skills untouched"
+[ "$FAIL" -eq 0 ] && echo "PASS: all ${#IN_SCOPE[@]} generators carry the rule; audit skills untouched"
 exit "$FAIL"

@@ -95,7 +95,55 @@ function hasCommand(bin, argv) {
 }
 
 async function tryImport(name) {
-  try { return await import(name); } catch { return null; }
+  // A bare `import(name)` resolves relative to THIS file, i.e. the skill's own directory inside
+  // the toolchain checkout — where playwright is not installed. Projects install it in their own
+  // node_modules, so that lookup failed and pickBackend() fell through to a false
+  // "no headless browser backend available" (exit 78) on boxes where the browser works fine.
+  //
+  // Try the skill-relative path first (a globally installed lib still resolves), then the
+  // project's, resolved from the invocation cwd upward.
+  try {
+    const lib = normaliseBrowserModule(await import(name));
+
+    if (lib) return lib;
+  } catch { /* fall through to the project lookup */ }
+
+  try {
+    // Everything needed is imported here rather than at module scope: this file's import block
+    // varies between versions, and a missing top-level binding would throw a ReferenceError that
+    // the catch below swallows -- reproducing the very false "no browser" verdict this fixes.
+    const { createRequire } = await import("node:module");
+    const { join } = await import("node:path");
+    const { pathToFileURL } = await import("node:url");
+
+    // createRequire walks up from this path, so a project that installs the browser anywhere
+    // above the invocation cwd resolves.
+    const req = createRequire(join(process.cwd(), "package.json"));
+
+    const mod = await import(pathToFileURL(req.resolve(name)).href);
+
+    // playwright and puppeteer ship CommonJS entry points. Imported dynamically, their exports
+    // land under `.default`, so the namespace itself has no `chromium`/`launch` -- which surfaced
+    // as "Cannot read properties of undefined (reading 'launch')" rather than as a resolution
+    // failure. Hand back whichever shape actually carries the API.
+    return normaliseBrowserModule(mod);
+  } catch { return null; }
+}
+
+/**
+ * Return the object that actually carries the browser API, ESM namespace or CJS default alike,
+ * or null when neither shape does.
+ *
+ * Returning the module regardless would make a resolved-but-unusable package look like a working
+ * backend, and pickBackend() would hand it to openPage() -- which is where the missing API
+ * resurfaces as "Cannot read properties of undefined (reading 'launch')" instead of the honest
+ * exit 78.
+ */
+function normaliseBrowserModule(mod) {
+  if (mod?.chromium || mod?.launch) return mod;
+  if (mod?.default?.chromium || mod?.default?.launch) return mod.default;
+
+  return null;
 }
 
 // ---------- commands ----------
@@ -117,7 +165,7 @@ async function adminLogin(backend, args) {
     await page.fill('input[name="login[password]"]', pass);
     await Promise.all([
       page.waitForNavigation({ waitUntil: "networkidle", timeout: 30000 }).catch(() => {}),
-      page.click('button[type="submit"]'),
+      page.click('button.action-login, button.action-primary, button[type="submit"]'),
     ]);
     if (screenshot) await safeScreenshot(page, screenshot);
     const dashUrl = page.url();
@@ -276,7 +324,7 @@ async function customerFlow(backend, args) {
     await page.fill('input[name="password_confirmation"]', pass);
     await Promise.all([
       page.waitForNavigation({ timeout: 30000 }).catch(() => {}),
-      page.click('button[type="submit"]'),
+      page.click('button.action-login, button.action-primary, button[type="submit"]'),
     ]);
     steps.push({ step: "register", url: page.url(), consoleErrors: [...consoleErrors] });
     consoleErrors.length = 0;
@@ -292,7 +340,7 @@ async function customerFlow(backend, args) {
     await page.fill('input[name="login[password]"]', pass);
     await Promise.all([
       page.waitForNavigation({ timeout: 30000 }).catch(() => {}),
-      page.click('button[type="submit"]'),
+      page.click('button.action-login, button.action-primary, button[type="submit"]'),
     ]);
     steps.push({ step: "login", url: page.url(), consoleErrors: [...consoleErrors] });
     consoleErrors.length = 0;
@@ -350,7 +398,9 @@ async function openPage(backend, opts = {}) {
 
   if (backend.kind === "playwright") {
     const browser = await backend.lib.chromium.launch({ headless: true });
-    const context = await browser.newContext();
+    // ignoreHTTPSErrors is required, not optional: local Magento stacks are routinely served over
+    // a self-signed cert, and without this every navigation fails ERR_CERT_AUTHORITY_INVALID.
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
     if (opts.cookieFile && existsSync(opts.cookieFile)) {
       try {
         // ESM has no `require`; use the imported readFileSync (FI-7).
@@ -378,7 +428,14 @@ async function openPage(backend, opts = {}) {
   }
 
   if (backend.kind === "puppeteer") {
-    const browser = await backend.lib.launch({ headless: "new" });
+    // Same self-signed-cert reason as the Playwright context above. Puppeteer renamed the option
+    // in v22 (ignoreHTTPSErrors -> acceptInsecureCerts); pass both so either version honours it and
+    // the other ignores an unknown key.
+    const browser = await backend.lib.launch({
+      headless: "new",
+      ignoreHTTPSErrors: true,
+      acceptInsecureCerts: true,
+    });
     const rawPage = await browser.newPage();
     if (opts.cookieFile && existsSync(opts.cookieFile)) {
       try {

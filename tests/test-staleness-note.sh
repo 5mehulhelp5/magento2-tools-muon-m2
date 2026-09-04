@@ -6,7 +6,7 @@ SKILLS=(
     webapi graphql frontend
     admin-form admin-listing cli-command
     eav-attribute extension-point system-config
-    message-queue indexer data-migration
+    message-queue indexer data-migration widget
 )
 FAIL=0
 for s in "${SKILLS[@]}"; do

@@ -6,7 +6,7 @@ Implemented by: Claude Code using `feature`
 Blueprint: `.docs/{FeatureName}/blueprint.md`
 Skill versions:
 
-- feature@2.15.1
+- feature@2.15.2
   - module-create@1.10.2
   - review@2.4.0
   - context@1.14.0

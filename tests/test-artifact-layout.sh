@@ -18,7 +18,7 @@ fi
 for cat in reviews audits quality marketplace accessibility breeze-compat upgrades \
            tests docs-generated deployments releases i18n bug-fixes debug \
            adminhtml-forms adminhtml-listings cli-commands eav-attributes \
-           extension-points indexers message-queues system-config migrations; do
+           extension-points indexers message-queues system-config migrations widgets; do
     if ! grep -qE "\`${cat}\`|\`${cat}/|/${cat}/" "$LAYOUT"; then
         echo "FAIL: category '$cat' not registered in artifact-layout.md"; FAIL=1
     fi
