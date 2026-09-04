@@ -6,7 +6,7 @@ individual skill versions are tracked in each SKILL.md frontmatter and the gener
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] — CMS widgets are a scaffold, not a copy-paste from a blog post
+## [2.1.0] — 2026-09-04 — CMS widgets are a scaffold, not a copy-paste from a blog post
 
 ### Added
 
